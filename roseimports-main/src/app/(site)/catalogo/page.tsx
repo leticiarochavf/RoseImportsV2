@@ -15,9 +15,13 @@ export const metadata: Metadata = {
     "Perfumes, cosméticos, eletrônicos e acessórios importados disponíveis na Rose Imports.",
 };
 
-type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+type SearchParams = Promise<
+  Record<string, string | string[] | undefined>
+>;
 
-function first(value: string | string[] | undefined): string | undefined {
+function first(
+  value: string | string[] | undefined
+): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
@@ -44,44 +48,65 @@ export default async function CatalogoPage({
   const hasFilters = Object.values(filters).some(Boolean);
 
   return (
-    <div className="mx-auto max-w-7xl px-5 py-10 sm:py-14">
-      <header>
-        <p className="eyebrow">Nossos produtos</p>
-        <h1 className="mt-2 text-3xl sm:text-4xl">Catálogo</h1>
-        <div className="filete-left mt-3" aria-hidden />
+    <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
+      {/* Cabeçalho */}
+      <header className="max-w-2xl">
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+          Catálogo
+        </h1>
+
+        <p className="mt-3 text-sm leading-6 text-muted sm:text-base">
+          Encontre perfumes, cosméticos, eletrônicos e acessórios selecionados
+          pela Rose Imports.
+        </p>
       </header>
 
-      <div className="mt-9">
-        <Suspense fallback={<div className="h-32" />}>
-          <CatalogFilters categories={categories} families={families} />
+      {/* Filtros */}
+      <section className="mt-8">
+        <Suspense fallback={<div className="h-24" />}>
+          <CatalogFilters
+            categories={categories}
+            families={families}
+          />
         </Suspense>
+      </section>
+
+      {/* Quantidade de produtos */}
+      <div className="mt-5 flex items-center border-b border-border/60 pb-4">
+        <p
+          className="text-sm text-muted"
+          role="status"
+          aria-live="polite"
+        >
+          {products.length === 1
+            ? "1 produto encontrado"
+            : `${products.length} produtos encontrados`}
+        </p>
       </div>
 
-      <p className="mt-8 text-xs text-muted" role="status">
-        {products.length === 1
-          ? "1 produto encontrado"
-          : `${products.length} produtos encontrados`}
-      </p>
-
-      <div className="mt-6">
+      {/* Produtos */}
+      <section className="mt-6">
         {products.length > 0 ? (
-          <ProductGrid products={products} priorityCount={4} />
+          <ProductGrid
+            products={products}
+            priorityCount={4}
+          />
         ) : hasFilters ? (
           <EmptyState
-            title="Nenhum produto com esses filtros"
-            description="Tente outro termo de busca ou remova alguns filtros para ver mais opções."
-            actionLabel="Ver todo o catálogo"
+            title="Nenhum produto encontrado"
+            description="Tente outro termo de busca ou ajuste os filtros para encontrar mais opções."
+            actionLabel="Limpar filtros"
             actionHref="/catalogo"
           />
         ) : (
           <EmptyState
-            title="Catálogo em preparação"
-            description="Os produtos estão sendo cadastrados. Fale com a gente no WhatsApp para saber o que já está disponível."
+            title="Novidades chegando"
+            description="Estamos preparando novos produtos para o catálogo. Fale com a gente pelo WhatsApp para conferir o que já está disponível."
             actionLabel="Voltar ao início"
             actionHref="/"
           />
         )}
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
