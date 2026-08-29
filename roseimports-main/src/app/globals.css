@@ -1,0 +1,144 @@
+@import "tailwindcss";
+
+/* =============================================================
+   Rose Imports — identidade visual
+
+   Base clara (marfim), preto reservado para texto e footer,
+   rosé e dourado apenas como acento. O produto é o protagonista.
+   ============================================================= */
+
+@theme {
+  /* Superfícies */
+  --color-ivory: #fbf8f5;
+  --color-ivory-deep: #f4ede7;
+  --color-surface: #ffffff;
+
+  /* Texto */
+  --color-ink: #191413;
+  --color-ink-soft: #4a403c;
+  --color-muted: #7a6e68;
+
+  /* Traços */
+  --color-line: #eae0d9;
+  --color-line-strong: #ddd0c6;
+
+  /* Acentos — as versões escuras têm contraste suficiente sobre marfim */
+  --color-rose: #a85f72;
+  --color-rose-soft: #e7b9c2;
+  --color-rose-wash: #fbeff1;
+  --color-gold: #9a7b4f;
+  --color-gold-soft: #e6cba4;
+
+  /* Estados */
+  --color-danger: #a33a3a;
+  --color-success: #3f6b4f;
+
+  --font-display: var(--font-bodoni), Georgia, serif;
+  --font-sans: var(--font-jost), system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-ivory);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-weight: 300;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+
+  /* Foco sempre visível, em todo elemento interativo. */
+  :focus-visible {
+    outline: 2px solid var(--color-rose);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  ::selection {
+    background: var(--color-rose-soft);
+    color: var(--color-ink);
+  }
+}
+
+@layer components {
+  /* O filete: elemento de assinatura, ecoa o divisor da logo.
+     Aparece sob títulos de seção, no header e no footer. */
+  .filete {
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--color-rose-soft) 20%,
+      var(--color-gold-soft) 50%,
+      var(--color-rose-soft) 80%,
+      transparent
+    );
+  }
+
+  .filete-left {
+    height: 1px;
+    width: 3rem;
+    background: linear-gradient(to right, var(--color-rose), var(--color-gold-soft));
+  }
+
+  /* Caixa alta com tracking largo, como a linha
+     "PERFUMARIA E COSMÉTICOS IMPORTADOS" da logo. */
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 400;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  /* Selects de filtro: alinha o menu nativo à paleta do site
+     (marfim, tinta, realce rosé) em vez do branco/azul do sistema. */
+  .filter-select {
+    color-scheme: light;
+    font-family: var(--font-sans);
+    accent-color: var(--color-rose);
+  }
+
+  .filter-select option {
+    background-color: var(--color-ivory);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+
+  .filter-select option:checked,
+  .filter-select option:hover {
+    background-color: var(--color-rose-wash);
+    color: var(--color-ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
