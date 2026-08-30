@@ -1,155 +1,430 @@
 import Link from "next/link";
-import { Logo } from "@/components/logo";
-import { ProductImage } from "@/components/product-image";
+import { CategoryCircles } from "@/components/category-circles";
+import { HeroCarousel } from "@/components/hero-carousel";
 import { ProductCarousel } from "@/components/product-carousel";
-import { SectionHeading } from "@/components/section-heading";
+import { ProductImage } from "@/components/product-image";
 import { TrustStrip } from "@/components/trust-strip";
 import {
   getBestSellingProducts,
-  getCategories,
   getFeaturedProducts,
   getNewProducts,
+  type ProductCard,
 } from "@/features/catalog/queries";
+import { formatCents } from "@/lib/money";
 
 export const revalidate = 60;
 
-const AUDIENCE = [
-  { label: "Masculino", href: "/catalogo?genero=masculino" },
-  { label: "Feminino", href: "/catalogo?genero=feminino" },
-] as const;
+function uniqueProducts(products: ProductCard[]) {
+  return products.filter(
+    (product, index, list) =>
+      list.findIndex((item) => item.id === product.id) === index,
+  );
+}
+
+function editorialTitle(product: ProductCard) {
+  const firstName = product.name.split("/")[0]?.trim();
+
+  if (!firstName) return product.name;
+
+  return firstName
+    .toLocaleLowerCase("pt-BR")
+    .replace(/(^|\s)\S/g, (letter) =>
+      letter.toLocaleUpperCase("pt-BR"),
+    );
+}
 
 export default async function HomePage() {
-  const [bestSellingRaw, featured, newProducts, categories] = await Promise.all([
-    getBestSellingProducts(10),
-    getFeaturedProducts(10),
-    getNewProducts(10),
-    getCategories(),
+  const [bestSellingRaw, featured, newProducts] = await Promise.all([
+    getBestSellingProducts(4),
+    getFeaturedProducts(4),
+    getNewProducts(8),
   ]);
 
-  const bestSelling = bestSellingRaw.length >= 3
-    ? bestSellingRaw
-    : [...bestSellingRaw, ...featured, ...newProducts]
-        .filter((product, index, list) => list.findIndex((item) => item.id === product.id) === index)
-        .slice(0, 10);
+  const heroProducts = (
+    featured.length > 0 ? featured : newProducts
+  ).slice(0, 3);
 
-  const featuredClean = featured
-    .filter((product) => !bestSellingRaw.some((best) => best.id === product.id))
-    .slice(0, 10);
+  const heroIds = new Set(
+    heroProducts.map((product) => product.id),
+  );
 
-  const heroProduct = featured[0] ?? newProducts[0] ?? bestSelling[0] ?? null;
+  const bestSelling = uniqueProducts([
+    ...bestSellingRaw,
+    ...featured,
+    ...newProducts,
+  ]).slice(0, 4);
+
+  const editorialProduct =
+    [...featured, ...newProducts, ...bestSelling].find(
+      (product) => !heroIds.has(product.id),
+    ) ?? null;
 
   return (
-    <>
-      <section className="border-b border-line bg-surface">
-        <div className="mx-auto grid max-w-7xl items-center gap-10 px-5 py-12 sm:py-16 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16 lg:py-20">
-          <div className="max-w-xl">
-            <Logo variant="full" className="w-44 sm:w-52" />
-            <p className="eyebrow mt-7">Escolha com calma. Compre com facilidade.</p>
-            <h1 className="mt-3 text-4xl leading-[1.08] sm:text-5xl lg:text-[3.5rem]">
-              Importados para o seu dia a dia.
-            </h1>
-            <p className="mt-5 max-w-lg text-sm leading-relaxed text-muted sm:text-base">
-              Perfumes, cosméticos e eletrônicos organizados em uma vitrine simples, com as informações que você precisa para escolher melhor.
-            </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Link href="/catalogo" className="inline-flex min-h-12 items-center justify-center bg-ink px-7 text-xs tracking-[0.16em] text-ivory uppercase transition-opacity hover:opacity-85">
-                Ver catálogo
-              </Link>
-              <Link href="/catalogo?categoria=perfumes" className="inline-flex min-h-12 items-center justify-center border border-line-strong px-7 text-xs tracking-[0.16em] uppercase transition-colors hover:border-rose hover:text-rose">
-                Ver perfumes
-              </Link>
-            </div>
-          </div>
-
-          <div className="relative min-h-[22rem] overflow-hidden rounded-xl bg-ivory-deep sm:min-h-[30rem]">
-            {heroProduct ? (
-              <>
-                <ProductImage
-                  path={heroProduct.imagePath}
-                  alt={heroProduct.imageAlt ?? heroProduct.name}
-                  sizes="(max-width: 1024px) 100vw, 55vw"
-                  priority
-                />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/75 via-ink/20 to-transparent px-6 pt-24 pb-6 text-white sm:px-8 sm:pb-8">
-                  <p className="text-[0.65rem] tracking-[0.18em] uppercase opacity-80">Em destaque</p>
-                  <div className="mt-2 flex items-end justify-between gap-5">
-                    <div>
-                      <h2 className="font-display text-2xl sm:text-3xl">{heroProduct.name}</h2>
-                      {heroProduct.brand && <p className="mt-1 text-xs opacity-80">{heroProduct.brand}</p>}
-                    </div>
-                    <Link href={`/produto/${heroProduct.slug}`} className="shrink-0 border border-white/60 px-4 py-2 text-[0.65rem] tracking-[0.12em] uppercase transition-colors hover:bg-white hover:text-ink">
-                      Conhecer
-                    </Link>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex h-full min-h-[22rem] items-center justify-center sm:min-h-[30rem]">
-                <Logo variant="full" className="w-56 opacity-70" />
-              </div>
-            )}
-          </div>
+    <main>
+      {/* =====================================================
+          HERO
+          ===================================================== */}
+      <section className="mx-auto max-w-7xl px-4 pt-5 sm:px-6 sm:pt-7 lg:px-8">
+        <div className="overflow-hidden rounded-2xl">
+          <HeroCarousel products={heroProducts} />
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-5 py-9 sm:py-11">
-        <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
-          {categories.map((category) => (
-            <Link key={category.id} href={`/catalogo?categoria=${category.slug}`} className="shrink-0 rounded-full border border-line bg-surface px-5 py-2.5 text-sm transition-colors hover:border-rose hover:text-rose">
-              {category.name}
-            </Link>
-          ))}
-          {AUDIENCE.map((item) => (
-            <Link key={item.label} href={item.href} className="shrink-0 rounded-full border border-line bg-surface px-5 py-2.5 text-sm transition-colors hover:border-rose hover:text-rose">
-              {item.label}
-            </Link>
-          ))}
-        </div>
-      </section>
+      {/* =====================================================
+          CATEGORIAS REDONDAS
+          ===================================================== */}
+      <CategoryCircles />
 
+      {/* =====================================================
+          MAIS VENDIDOS
+          ===================================================== */}
       {bestSelling.length > 0 && (
-        <section className="mx-auto max-w-7xl px-5 py-10 sm:py-14">
+        <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-14 lg:px-8">
           <div className="flex items-end justify-between gap-5">
-            <SectionHeading eyebrow="Escolhas frequentes" title="Mais vendidos" />
-            <Link href="/catalogo" className="hidden text-xs tracking-[0.12em] text-muted uppercase transition-colors hover:text-rose sm:block">Ver todos →</Link>
-          </div>
-          <div className="mt-8"><ProductCarousel products={bestSelling} priorityCount={4} /></div>
-        </section>
-      )}
+            <div>
+              <p className="text-sm text-muted">
+                Produtos que estão fazendo sucesso
+              </p>
 
-      {featuredClean.length > 0 && (
-        <section className="border-y border-line bg-ivory-deep/35">
-          <div className="mx-auto max-w-7xl px-5 py-12 sm:py-16">
-            <div className="flex items-end justify-between gap-5">
-              <SectionHeading eyebrow="Curadoria Rose Imports" title="Em destaque" />
-              <Link href="/catalogo" className="hidden text-xs tracking-[0.12em] text-muted uppercase transition-colors hover:text-rose sm:block">Ver todos →</Link>
+              <h2 className="mt-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
+                Mais vendidos
+              </h2>
             </div>
-            <div className="mt-8"><ProductCarousel products={featuredClean} /></div>
+
+            <Link
+              href="/catalogo"
+              className="
+                inline-flex min-h-10 shrink-0
+                items-center justify-center
+                rounded-lg border border-line-strong
+                px-4 text-sm font-semibold
+                transition-all duration-200
+                hover:-translate-y-0.5
+                hover:border-rose
+                hover:text-rose
+              "
+            >
+              Ver todos
+            </Link>
+          </div>
+
+          <div className="mt-7">
+            <ProductCarousel
+              products={bestSelling}
+              priorityCount={4}
+            />
           </div>
         </section>
       )}
 
-      <section className="mx-auto max-w-7xl px-5 py-14 sm:py-18">
-        <div className="grid gap-4 md:grid-cols-3">
-          <Link href="/catalogo?categoria=perfumes" className="group min-h-48 rounded-lg border border-line bg-surface p-7 transition-colors hover:border-rose">
-            <p className="eyebrow">Perfumes</p>
-            <h2 className="mt-3 max-w-xs text-2xl">Fragrâncias para diferentes estilos.</h2>
-            <span className="mt-8 inline-block text-xs tracking-[0.12em] text-rose uppercase">Explorar →</span>
+      {/* =====================================================
+          DESTAQUE EDITORIAL
+          ===================================================== */}
+      {editorialProduct && (
+        <section className="px-4 py-5 sm:px-6 lg:px-8">
+          <div
+            className="
+              group
+              mx-auto grid max-w-7xl
+              overflow-hidden rounded-2xl
+              bg-ink text-ivory
+              lg:grid-cols-[0.82fr_1.18fr]
+            "
+          >
+            {/* TEXTO */}
+            <div
+              className="
+                order-2
+                flex flex-col justify-center
+                px-6 py-8
+                sm:px-8 sm:py-10
+                lg:order-1
+                lg:px-10 lg:py-10
+                xl:px-12
+              "
+            >
+              <p className="text-xs font-semibold text-rose-soft">
+                Destaque Rose Imports
+              </p>
+
+              {editorialProduct.brand && (
+                <p className="mt-3 text-sm text-ivory/55">
+                  {editorialProduct.brand}
+                </p>
+              )}
+
+              <h2
+                className="
+                  mt-1 max-w-lg
+                  text-2xl font-bold
+                  leading-[1.15]
+                  tracking-[-0.025em]
+                  text-ivory
+                  sm:text-3xl
+                  lg:text-[2.25rem]
+                "
+              >
+                {editorialTitle(editorialProduct)}
+              </h2>
+
+              {editorialProduct.description && (
+                <p
+                  className="
+                    mt-4
+                    max-w-[48ch]
+                    line-clamp-3
+                    text-sm
+                    leading-6
+                    text-ivory/65
+                    sm:text-[0.95rem]
+                  "
+                >
+                  {editorialProduct.description}
+                </p>
+              )}
+
+              {editorialProduct.fromPriceCents !== null && (
+                <div className="mt-5">
+                  {editorialProduct.variantCount > 1 && (
+                    <p className="mb-1 text-xs text-ivory/45">
+                      A partir de
+                    </p>
+                  )}
+
+                  <p className="text-2xl font-bold tracking-[-0.02em] text-ivory">
+                    {formatCents(
+                      editorialProduct.fromPriceCents,
+                    )}
+                  </p>
+
+                  <p className="mt-1 text-sm text-ivory/50">
+                    Em até 3x com juros da maquininha
+                  </p>
+                </div>
+              )}
+
+              <div className="mt-6 flex flex-wrap items-center gap-4">
+                <Link
+                  href={`/produto/${editorialProduct.slug}`}
+                  className="
+                    inline-flex min-h-11
+                    items-center justify-center
+                    rounded-lg bg-ivory
+                    px-5
+                    text-sm font-semibold
+                    text-ink
+                    transition-all duration-200
+                    hover:-translate-y-0.5
+                    hover:bg-rose-soft
+                    hover:shadow-[0_8px_24px_rgba(0,0,0,0.14)]
+                    active:scale-[0.98]
+                  "
+                >
+                  Ver produto
+                </Link>
+
+                <Link
+                  href="/catalogo"
+                  className="
+                    inline-flex items-center gap-1
+                    text-sm font-semibold
+                    text-rose-soft
+                    transition-all duration-200
+                    hover:gap-2
+                    hover:text-ivory
+                  "
+                >
+                  Ver catálogo
+                  <span aria-hidden>→</span>
+                </Link>
+              </div>
+            </div>
+
+            {/* IMAGEM */}
+            <div
+              className="
+                order-1
+                relative
+                min-h-[260px]
+                overflow-hidden
+                bg-ink-soft
+
+                [&_img]:object-cover
+                [&_img]:transition-transform
+                [&_img]:duration-700
+                [&_img]:ease-out
+
+                group-hover:[&_img]:scale-[1.025]
+
+                sm:min-h-[320px]
+                lg:order-2
+                lg:min-h-[380px]
+              "
+            >
+              <ProductImage
+                path={editorialProduct.imagePath}
+                alt={
+                  editorialProduct.imageAlt ??
+                  editorialProduct.name
+                }
+                sizes="(max-width: 1024px) 100vw, 58vw"
+              />
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* =====================================================
+          BANNERS
+          ===================================================== */}
+      <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-14 lg:px-8">
+        <div className="mb-7">
+          <p className="text-sm font-semibold text-rose">
+            Para descobrir
+          </p>
+
+          <h2 className="mt-1 text-2xl font-bold tracking-[-0.02em] sm:text-3xl">
+            Encontre seu próximo favorito
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          {/* PERFUMES */}
+          <Link
+            href="/catalogo?categoria=perfumes"
+            className="
+              group relative
+              min-h-[300px]
+              overflow-hidden
+              rounded-2xl
+              bg-ivory-deep
+              sm:min-h-[340px]
+            "
+          >
+            <div
+              className="
+                absolute inset-0
+                bg-cover bg-center
+                transition-transform
+                duration-700
+                ease-out
+                group-hover:scale-[1.035]
+              "
+              style={{
+                backgroundImage:
+                  'url("/categorias/rose-banner-perfumes.png")',
+              }}
+            />
+
+            <div
+              className="
+                absolute inset-0
+                bg-gradient-to-t
+                from-black/70
+                via-black/15
+                to-transparent
+              "
+            />
+
+            <div className="absolute inset-x-0 bottom-0 p-6 sm:p-7">
+              <p className="text-xs font-semibold text-rose-soft">
+                Perfumes importados
+              </p>
+
+              <h3 className="mt-1 text-2xl font-bold text-white">
+                Perfumes árabes
+              </h3>
+
+              <p className="mt-2 max-w-md text-sm leading-6 text-white/80">
+                Fragrâncias marcantes de marcas como Lattafa,
+                Armaf, Afnan e French Avenue.
+              </p>
+
+              <span
+                className="
+                  mt-5 inline-flex items-center gap-2
+                  text-sm font-semibold text-white
+                  transition-all duration-200
+                  group-hover:gap-3
+                "
+              >
+                Explorar perfumes
+                <span aria-hidden>→</span>
+              </span>
+            </div>
           </Link>
-          <Link href="/catalogo?categoria=cosmeticos" className="group min-h-48 rounded-lg border border-line bg-surface p-7 transition-colors hover:border-rose">
-            <p className="eyebrow">Cosméticos</p>
-            <h2 className="mt-3 max-w-xs text-2xl">Cuidados e beleza em uma seleção objetiva.</h2>
-            <span className="mt-8 inline-block text-xs tracking-[0.12em] text-rose uppercase">Explorar →</span>
-          </Link>
-          <Link href="/catalogo?categoria=eletronicos" className="group min-h-48 rounded-lg border border-line bg-surface p-7 transition-colors hover:border-rose">
-            <p className="eyebrow">Eletrônicos</p>
-            <h2 className="mt-3 max-w-xs text-2xl">Tecnologia útil sem complicar a escolha.</h2>
-            <span className="mt-8 inline-block text-xs tracking-[0.12em] text-rose uppercase">Explorar →</span>
+
+          {/* COSMÉTICOS */}
+          <Link
+            href="/catalogo?categoria=cosmeticos"
+            className="
+              group relative
+              min-h-[300px]
+              overflow-hidden
+              rounded-2xl
+              bg-ivory-deep
+              sm:min-h-[340px]
+            "
+          >
+            <div
+              className="
+                absolute inset-0
+                bg-cover bg-center
+                transition-transform
+                duration-700
+                ease-out
+                group-hover:scale-[1.035]
+              "
+              style={{
+                backgroundImage:
+                  'url("/categorias/rose-banner-cosmeticos.png")',
+              }}
+            />
+
+            <div
+              className="
+                absolute inset-0
+                bg-gradient-to-t
+                from-black/65
+                via-black/10
+                to-transparent
+              "
+            />
+
+            <div className="absolute inset-x-0 bottom-0 p-6 sm:p-7">
+              <p className="text-xs font-semibold text-rose-soft">
+                Beleza & cuidados
+              </p>
+
+              <h3 className="mt-1 text-2xl font-bold text-white">
+                Skincare
+              </h3>
+
+              <p className="mt-2 max-w-md text-sm leading-6 text-white/80">
+                Cuidados, ativos e tecnologia para deixar sua rotina
+                de beleza ainda mais completa.
+              </p>
+
+              <span
+                className="
+                  mt-5 inline-flex items-center gap-2
+                  text-sm font-semibold text-white
+                  transition-all duration-200
+                  group-hover:gap-3
+                "
+              >
+                Explorar cosméticos
+                <span aria-hidden>→</span>
+              </span>
+            </div>
           </Link>
         </div>
       </section>
 
+      {/* =====================================================
+          BENEFÍCIOS / CONFIANÇA
+          ===================================================== */}
       <TrustStrip />
-    </>
+    </main>
   );
 }

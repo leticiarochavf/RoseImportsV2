@@ -63,6 +63,7 @@ const PRODUCT_SELECT = `
    --------------------------------------------------------------- */
 
 export type ProductCard = {
+  description: ReactNode;
   id: string;
   name: string;
   slug: string;

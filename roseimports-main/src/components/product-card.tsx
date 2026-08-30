@@ -27,13 +27,7 @@ export function ProductCard({
         href={`/produto/${product.slug}`}
         className="flex h-full flex-col p-3 sm:p-4"
       >
-        {/* Imagem */}
-        <div
-          className="
-            relative aspect-square overflow-hidden
-            rounded-lg bg-surface
-          "
-        >
+        <div className="relative aspect-square overflow-hidden rounded-lg bg-surface">
           <div
             className="
               absolute inset-0
@@ -50,7 +44,6 @@ export function ProductCard({
             />
           </div>
 
-          {/* Promoção */}
           {product.promotional && !soldOut && (
             <span
               className="
@@ -64,14 +57,12 @@ export function ProductCard({
             </span>
           )}
 
-          {/* Esgotado */}
           {soldOut && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-ivory/75">
               <span
                 className="
                   rounded-full bg-surface px-3 py-1.5
-                  text-[0.65rem] font-medium
-                  uppercase tracking-[0.1em]
+                  text-[0.65rem] font-medium uppercase tracking-[0.1em]
                 "
               >
                 Esgotado
@@ -80,17 +71,10 @@ export function ProductCard({
           )}
         </div>
 
-        {/* Informações */}
         <div className="flex flex-1 flex-col pt-4">
           <div>
             {product.brand && (
-              <p
-                className="
-                  text-[0.65rem] font-medium
-                  uppercase tracking-[0.08em]
-                  text-muted
-                "
-              >
+              <p className="text-[0.65rem] font-medium uppercase tracking-[0.08em] text-muted">
                 {product.brand}
               </p>
             )}
@@ -107,7 +91,6 @@ export function ProductCard({
             </h3>
           </div>
 
-          {/* Preço */}
           <div className="mt-4">
             {product.fromPriceCents !== null && (
               <>
@@ -133,7 +116,6 @@ export function ProductCard({
             />
           </div>
 
-          {/* Botão */}
           <div className="mt-auto pt-5">
             <span
               className={`

@@ -26,16 +26,13 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-ivory/95 backdrop-blur-md">
-      {/* Faixa superior */}
       <div className="border-b border-line bg-ivory-deep/55">
         <p className="mx-auto max-w-7xl px-5 py-2 text-center text-xs text-muted">
           Rose Imports · perfumes, cosméticos e eletrônicos
         </p>
       </div>
 
-      {/* Header principal */}
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-5 lg:gap-6">
-        {/* Menu mobile */}
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
@@ -72,10 +69,8 @@ export function SiteHeader() {
           </svg>
         </button>
 
-        {/* Logo */}
         <Logo variant="mark" className="shrink-0" />
 
-        {/* Busca desktop */}
         <form
           action="/catalogo"
           className="mx-auto hidden w-full max-w-xl lg:block"
@@ -132,7 +127,6 @@ export function SiteHeader() {
           </div>
         </form>
 
-        {/* Ações */}
         <div className="ml-auto flex items-center gap-1 sm:gap-2 lg:ml-0">
           <AdminLink
             className="
@@ -143,7 +137,6 @@ export function SiteHeader() {
             "
           />
 
-          {/* Favoritos */}
           <Link
             href="/favoritos"
             aria-label="Favoritos"
@@ -166,10 +159,7 @@ export function SiteHeader() {
               strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className="
-                transition-all duration-200
-                group-hover:scale-110
-              "
+              className="transition-all duration-200 group-hover:scale-110"
               aria-hidden
             >
               <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
@@ -180,12 +170,10 @@ export function SiteHeader() {
             </span>
           </Link>
 
-          {/* Carrinho */}
           <CartLink />
         </div>
       </div>
 
-      {/* Navegação desktop */}
       <nav
         className="hidden border-t border-line lg:block"
         aria-label="Principal"
@@ -207,14 +195,12 @@ export function SiteHeader() {
         </div>
       </nav>
 
-      {/* Menu mobile */}
       {open && (
         <nav
           id="menu-principal"
           className="border-t border-line bg-surface lg:hidden"
           aria-label="Principal"
         >
-          {/* Busca */}
           <div className="px-5 pt-4">
             <form action="/catalogo">
               <label htmlFor="busca-mobile" className="sr-only">
@@ -242,11 +228,7 @@ export function SiteHeader() {
                 <button
                   type="submit"
                   aria-label="Pesquisar"
-                  className="
-                    absolute right-4 top-1/2
-                    -translate-y-1/2
-                    text-muted
-                  "
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted"
                 >
                   <svg
                     width="18"
@@ -266,7 +248,6 @@ export function SiteHeader() {
             </form>
           </div>
 
-          {/* Links */}
           <ul className="mx-auto max-w-7xl px-5 py-3">
             {NAV.map((item) => (
               <li
@@ -275,18 +256,13 @@ export function SiteHeader() {
               >
                 <Link
                   href={item.href}
-                  className="
-                    block py-3.5 text-sm font-medium
-                    transition-colors
-                    hover:text-rose
-                  "
+                  className="block py-3.5 text-sm font-medium transition-colors hover:text-rose"
                 >
                   {item.label}
                 </Link>
               </li>
             ))}
 
-            {/* Favoritos no menu mobile */}
             <li className="border-t border-line">
               <Link
                 href="/favoritos"

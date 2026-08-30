@@ -20,7 +20,7 @@ type SearchParams = Promise<
 >;
 
 function first(
-  value: string | string[] | undefined
+  value: string | string[] | undefined,
 ): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -49,7 +49,6 @@ export default async function CatalogoPage({
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
-      {/* Cabeçalho */}
       <header className="max-w-2xl">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
           Catálogo
@@ -61,7 +60,6 @@ export default async function CatalogoPage({
         </p>
       </header>
 
-      {/* Filtros */}
       <section className="mt-8">
         <Suspense fallback={<div className="h-24" />}>
           <CatalogFilters
@@ -71,8 +69,7 @@ export default async function CatalogoPage({
         </Suspense>
       </section>
 
-      {/* Quantidade de produtos */}
-      <div className="mt-5 flex items-center border-b border-border/60 pb-4">
+      <div className="mt-5 flex items-center border-b border-line pb-4">
         <p
           className="text-sm text-muted"
           role="status"
@@ -84,7 +81,6 @@ export default async function CatalogoPage({
         </p>
       </div>
 
-      {/* Produtos */}
       <section className="mt-6">
         {products.length > 0 ? (
           <ProductGrid

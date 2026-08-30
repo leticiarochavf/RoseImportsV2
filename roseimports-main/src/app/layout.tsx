@@ -1,38 +1,49 @@
 import type { Metadata } from "next";
-import { Bodoni_Moda, Jost } from "next/font/google";
+import { Nunito_Sans } from "next/font/google";
 import { site } from "@/lib/config/site";
 import { CartProvider } from "@/features/cart/cart-context";
 import "./globals.css";
 
-/* Bodoni Moda ecoa o alto contraste da logo; Jost, a linha em caixa
-   alta com tracking largo do descritivo. */
-const bodoni = Bodoni_Moda({
+const nunito = Nunito_Sans({
   subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-bodoni",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-nunito",
   display: "swap",
 });
 
-const jost = Jost({
-  subsets: ["latin"],
-  weight: ["300", "400", "500"],
-  variable: "--font-jost",
-  display: "swap",
-});
+const socialImage = new URL("/og.png", site.url).toString();
 
 export const metadata: Metadata = {
   metadataBase: new URL(site.url),
+
   title: {
     default: `${site.name} — ${site.tagline}`,
     template: `%s · ${site.name}`,
   },
+
   description: site.description,
+
   openGraph: {
     type: "website",
     locale: "pt_BR",
     siteName: site.name,
     title: `${site.name} — ${site.tagline}`,
     description: site.description,
+    images: [
+      {
+        url: socialImage,
+        width: 1536,
+        height: 864,
+        alt: "Rose Imports — Perfumes e cosméticos importados",
+      },
+    ],
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title: `${site.name} — ${site.tagline}`,
+    description: site.description,
+    images: [socialImage],
   },
 };
 
@@ -42,9 +53,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="pt-BR" className={`${bodoni.variable} ${jost.variable}`}>
-      <body>
-        <CartProvider>{children}</CartProvider>
+    <html lang="pt-BR" className={nunito.variable}>
+      <body className="font-sans antialiased">
+        <CartProvider>
+          {children}
+        </CartProvider>
       </body>
     </html>
   );

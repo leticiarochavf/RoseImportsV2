@@ -28,7 +28,6 @@ export function CartLink() {
         sm:px-3
       "
     >
-      {/* Ícone do carrinho */}
       <div className="relative">
         <svg
           width="20"
@@ -50,7 +49,6 @@ export function CartLink() {
           <path d="M9 7a3 3 0 0 1 6 0" />
         </svg>
 
-        {/* Badge mobile */}
         {hasItems && (
           <span
             className="
@@ -72,12 +70,10 @@ export function CartLink() {
         )}
       </div>
 
-      {/* Texto desktop */}
       <span className="hidden lg:inline">
         Carrinho
       </span>
 
-      {/* Badge desktop */}
       {hasItems && (
         <span
           className="

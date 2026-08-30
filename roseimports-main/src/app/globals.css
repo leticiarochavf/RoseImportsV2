@@ -1,12 +1,5 @@
 @import "tailwindcss";
 
-/* =============================================================
-   Rose Imports — identidade visual
-
-   Base clara (marfim), preto reservado para texto e footer,
-   rosé e dourado apenas como acento. O produto é o protagonista.
-   ============================================================= */
-
 @theme {
   /* Superfícies */
   --color-ivory: #fbf8f5;
@@ -22,10 +15,12 @@
   --color-line: #eae0d9;
   --color-line-strong: #ddd0c6;
 
-  /* Acentos — as versões escuras têm contraste suficiente sobre marfim */
+  /* Acentos */
   --color-rose: #a85f72;
+  --color-rose-deep: #8f4c5e;
   --color-rose-soft: #e7b9c2;
   --color-rose-wash: #fbeff1;
+
   --color-gold: #9a7b4f;
   --color-gold-soft: #e6cba4;
 
@@ -33,8 +28,24 @@
   --color-danger: #a33a3a;
   --color-success: #3f6b4f;
 
-  --font-display: var(--font-bodoni), Georgia, serif;
-  --font-sans: var(--font-jost), system-ui, sans-serif;
+  /* Tipografia */
+  --font-sans:
+    var(--font-nunito),
+    "Nunito Sans",
+    "Segoe UI",
+    Arial,
+    sans-serif;
+
+  /*
+   * Mantemos essa variável porque componentes antigos
+   * ainda podem usar font-display.
+   */
+  --font-display:
+    var(--font-nunito),
+    "Nunito Sans",
+    "Segoe UI",
+    Arial,
+    sans-serif;
 }
 
 @layer base {
@@ -46,23 +57,55 @@
     background-color: var(--color-ivory);
     color: var(--color-ink);
     font-family: var(--font-sans);
-    font-weight: 300;
+    font-weight: 400;
+
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   h1,
   h2,
-  h3 {
-    font-family: var(--font-display);
-    font-weight: 400;
-    letter-spacing: -0.01em;
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    letter-spacing: -0.025em;
   }
 
-  /* Foco sempre visível, em todo elemento interativo. */
+  h1 {
+    line-height: 1.08;
+  }
+
+  h2 {
+    line-height: 1.12;
+  }
+
+  h3 {
+    line-height: 1.2;
+  }
+
+  p {
+    letter-spacing: 0;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   :focus-visible {
     outline: 2px solid var(--color-rose);
     outline-offset: 3px;
-    border-radius: 2px;
+    border-radius: 4px;
   }
 
   ::selection {
@@ -72,8 +115,6 @@
 }
 
 @layer components {
-  /* O filete: elemento de assinatura, ecoa o divisor da logo.
-     Aparece sob títulos de seção, no header e no footer. */
   .filete {
     height: 1px;
     background: linear-gradient(
@@ -87,26 +128,42 @@
   }
 
   .filete-left {
-    height: 1px;
     width: 3rem;
-    background: linear-gradient(to right, var(--color-rose), var(--color-gold-soft));
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      var(--color-rose),
+      var(--color-gold-soft)
+    );
   }
 
-  /* Caixa alta com tracking largo, como a linha
-     "PERFUMARIA E COSMÉTICOS IMPORTADOS" da logo. */
+  .filete-wide {
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      var(--color-rose),
+      var(--color-gold-soft) 40%,
+      transparent
+    );
+  }
+
   .eyebrow {
-    font-size: 0.6875rem;
-    font-weight: 400;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: none;
     color: var(--color-muted);
   }
 
-  /* Selects de filtro: alinha o menu nativo à paleta do site
-     (marfim, tinta, realce rosé) em vez do branco/azul do sistema. */
+  .font-display {
+    font-family: var(--font-sans);
+  }
+
   .filter-select {
     color-scheme: light;
     font-family: var(--font-sans);
+    font-weight: 400;
     accent-color: var(--color-rose);
   }
 
