@@ -29,7 +29,7 @@ export function CartView() {
               return (
                 <li key={item.variantId} className="grid gap-4 p-4 sm:grid-cols-[5.5rem_1fr_auto] sm:items-center sm:p-5">
                   <Link href={`/produto/${item.slug}`} className="relative aspect-square w-20 overflow-hidden rounded-md border border-line bg-ivory-deep sm:w-[5.5rem]">
-                    {item.imagePath ? <Image src={imageUrl(item.imagePath)} alt={item.productName} fill sizes="88px" className="object-cover" /> : <span className="sr-only">{item.productName}</span>}
+                    {item.imagePath ? <Image src={imageUrl(item.imagePath)} alt={item.productName} fill sizes="88px" className="object-contain object-center p-2" /> : <span className="sr-only">{item.productName}</span>}
                   </Link>
 
                   <div className="min-w-0">

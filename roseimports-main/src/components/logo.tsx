@@ -15,9 +15,11 @@ type Variant = "mark" | "full" | "type";
 export function Logo({
   variant = "mark",
   className = "",
+  imageClassName = "",
 }: {
   variant?: Variant;
   className?: string;
+  imageClassName?: string;
 }) {
   if (variant === "type") {
     return (
@@ -48,7 +50,7 @@ export function Logo({
         height={isFull ? 356 : 150}
         priority
         sizes={isFull ? "(max-width: 640px) 260px, 420px" : "150px"}
-        className={isFull ? "h-auto w-full" : "h-9 w-auto sm:h-10"}
+        className={`${isFull ? "h-auto w-full" : "h-9 w-auto sm:h-10"} ${imageClassName}`}
       />
     </Link>
   );

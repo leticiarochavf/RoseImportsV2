@@ -170,6 +170,7 @@ export function HeroCarousel({
       className="
         grid overflow-hidden
         bg-surface
+        lg:h-[512px]
         lg:grid-cols-[0.9fr_1.1fr]
       "
     >
@@ -178,19 +179,12 @@ export function HeroCarousel({
         className="
           group/image
           relative
-          min-h-[260px]
+          h-[300px]
           overflow-hidden
+          rounded-r-2xl
           bg-ivory-deep
-
-          [&_img]:object-cover
-          [&_img]:transition-transform
-          [&_img]:duration-700
-          [&_img]:ease-out
-
-          sm:min-h-[320px]
-          lg:min-h-[430px]
-
-          lg:group-hover/image:[&_img]:scale-[1.015]
+          sm:h-[360px]
+          lg:h-full
         "
       >
         <ProductImage
@@ -198,6 +192,7 @@ export function HeroCarousel({
           alt={product.imageAlt ?? product.name}
           sizes="(max-width: 1024px) 100vw, 45vw"
           priority
+          className="object-contain object-center p-3 sm:p-4 lg:p-5"
         />
 
         {/* Overlay */}
@@ -319,6 +314,7 @@ export function HeroCarousel({
           px-6 py-8
           sm:px-8 sm:py-10
           lg:px-10 lg:py-10
+          lg:h-full lg:overflow-hidden
           xl:px-12
         "
       >
@@ -327,10 +323,10 @@ export function HeroCarousel({
           <span
             className="
               rounded-full
-              bg-rose/10
+              bg-gold-soft/30
               px-3 py-1
               text-xs font-semibold
-              text-rose
+              text-gold
             "
           >
             Novidade
@@ -356,23 +352,24 @@ export function HeroCarousel({
           className="
             mt-4
             max-w-[17ch]
+            line-clamp-2
+            min-h-[4.45rem]
             text-3xl font-bold
             leading-[1.05]
             tracking-[-0.035em]
             text-ink
             sm:text-4xl
-            lg:text-[2.8rem]
+            sm:min-h-[5rem]
+            lg:min-h-[5.9rem] lg:text-[2.8rem]
           "
         >
           {heroTitle}
         </h1>
 
         {/* Tipo + volume */}
-        {heroMeta && (
-          <p className="mt-2 text-sm font-medium text-muted sm:text-base">
-            {heroMeta}
-          </p>
-        )}
+        <p className="mt-2 min-h-6 text-sm font-medium text-muted sm:text-base">
+          {heroMeta || "\u00A0"}
+        </p>
 
         <div className="mt-4 h-[2px] w-10 rounded-full bg-rose/40" />
 
@@ -381,6 +378,7 @@ export function HeroCarousel({
           className="
             mt-4
             max-w-lg
+            line-clamp-2 min-h-12
             text-sm leading-6
             text-ink-soft
             sm:text-base
@@ -391,7 +389,7 @@ export function HeroCarousel({
 
         {/* PREÇO */}
         {product.fromPriceCents !== null && (
-          <div className="mt-5">
+          <div className="mt-5 min-h-[4.5rem]">
             {product.variantCount > 1 && (
               <p className="mb-1 text-xs text-muted">
                 A partir de

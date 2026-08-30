@@ -1,6 +1,6 @@
 export const site = {
   name: "Rose Imports",
-  tagline: "Perfumes, cosméticos e eletrônicos importados",
+  tagline: "Perfumes e cosméticos importados",
   description:
     "Perfumes, cosméticos e eletrônicos importados na Rose Imports. Consulte disponibilidade, monte seu pedido e finalize o atendimento pelo WhatsApp.",
   url: "https://roseimports.com.br",

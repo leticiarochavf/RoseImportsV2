@@ -46,6 +46,7 @@ export function CatalogFilters({ categories, families }: Props) {
     const next = new URLSearchParams(params.toString());
     if (value) next.set(key, value);
     else next.delete(key);
+    next.delete("pagina");
 
     startTransition(() => {
       router.replace(next.toString() ? `/catalogo?${next}` : "/catalogo", {

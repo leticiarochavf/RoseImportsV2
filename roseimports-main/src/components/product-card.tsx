@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ProductImage } from "@/components/product-image";
+import { ProductImageGallery } from "@/components/product-image-gallery";
 import { StockBadge } from "@/components/stock-badge";
 import { formatCents } from "@/lib/money";
 import type { ProductCard as ProductCardData } from "@/features/catalog/queries";
@@ -16,38 +16,31 @@ export function ProductCard({
   return (
     <article
       className="
-        group h-full overflow-hidden rounded-xl
+        group/card h-full overflow-hidden rounded-xl
         border border-line bg-surface
         transition-all duration-300 ease-out
         hover:-translate-y-1
         hover:shadow-[0_14px_35px_rgba(0,0,0,0.08)]
       "
     >
-      <Link
-        href={`/produto/${product.slug}`}
-        className="flex h-full flex-col p-3 sm:p-4"
-      >
-        <div className="relative aspect-square overflow-hidden rounded-lg bg-surface">
-          <div
-            className="
-              absolute inset-0
-              transition-all duration-500 ease-out
-              group-hover:scale-[1.04]
-              group-hover:drop-shadow-[0_12px_18px_rgba(0,0,0,0.12)]
-            "
-          >
-            <ProductImage
-              path={product.imagePath}
-              alt={product.imageAlt ?? product.name}
-              sizes="(max-width: 640px) 72vw, (max-width: 1024px) 42vw, 23vw"
-              priority={priority}
-            />
-          </div>
+      <div className="flex h-full flex-col p-3 sm:p-4">
+        <div className="relative aspect-square overflow-hidden rounded-xl bg-gradient-to-br from-surface to-ivory-deep ring-1 ring-inset ring-line/70">
+          <ProductImageGallery
+            images={product.images}
+            fallbackPath={product.imagePath}
+            fallbackAlt={product.imageAlt}
+            productName={product.name}
+            productHref={`/produto/${product.slug}`}
+            sizes="(max-width: 640px) 72vw, (max-width: 1024px) 42vw, 23vw"
+            priority={priority}
+            className="absolute inset-0"
+            imageClassName="object-contain object-center p-3 sm:p-4"
+          />
 
           {product.promotional && !soldOut && (
             <span
               className="
-                absolute left-3 top-3 z-10
+                pointer-events-none absolute left-3 top-3 z-30
                 rounded-full bg-rose px-2.5 py-1
                 text-[0.6rem] font-medium
                 uppercase tracking-[0.1em] text-white
@@ -58,7 +51,7 @@ export function ProductCard({
           )}
 
           {soldOut && (
-            <div className="absolute inset-0 z-20 flex items-center justify-center bg-ivory/75">
+            <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-ivory/75">
               <span
                 className="
                   rounded-full bg-surface px-3 py-1.5
@@ -73,22 +66,25 @@ export function ProductCard({
 
         <div className="flex flex-1 flex-col pt-4">
           <div>
-            {product.brand && (
-              <p className="text-[0.65rem] font-medium uppercase tracking-[0.08em] text-muted">
-                {product.brand}
-              </p>
-            )}
+            <div className="min-h-4">
+              {product.brand && (
+                <p className="text-[0.65rem] font-medium uppercase tracking-[0.08em] text-muted">
+                  {product.brand}
+                </p>
+              )}
+            </div>
 
-            <h3
+            <Link
+              href={`/produto/${product.slug}`}
               className="
-                mt-1 text-sm font-semibold leading-snug
+                mt-1 block min-h-10 line-clamp-2 text-sm font-semibold leading-snug
                 transition-colors duration-200
-                group-hover:text-rose
-                sm:text-base
+                group-hover/card:text-rose
+                sm:min-h-11 sm:text-base
               "
             >
               {product.name}
-            </h3>
+            </Link>
           </div>
 
           <div className="mt-4">
@@ -117,30 +113,36 @@ export function ProductCard({
           </div>
 
           <div className="mt-auto pt-5">
-            <span
-              className={`
-                flex h-11 w-full items-center justify-center
-                rounded-lg px-4
-                text-sm font-medium
-                transition-all duration-200
-                ${
-                  soldOut
-                    ? "cursor-not-allowed border border-line text-muted"
-                    : `
-                      bg-rose text-white
-                      group-hover:-translate-y-0.5
-                      group-hover:shadow-[0_7px_18px_rgba(0,0,0,0.12)]
-                      group-active:translate-y-0
-                      group-active:scale-[0.98]
-                    `
-                }
-              `}
-            >
-              {soldOut ? "Produto esgotado" : "Comprar"}
-            </span>
+            {soldOut ? (
+              <span
+                className="
+                  flex h-11 w-full items-center justify-center
+                  rounded-lg border border-line px-4
+                  text-sm font-medium text-muted
+                "
+              >
+                Produto esgotado
+              </span>
+            ) : (
+              <Link
+                href={`/produto/${product.slug}`}
+                className="
+                  flex h-11 w-full items-center justify-center
+                  rounded-lg bg-rose px-4
+                  text-sm font-medium text-white
+                  transition-all duration-200
+                  group-hover/card:-translate-y-0.5
+                  group-hover/card:shadow-[0_7px_18px_rgba(0,0,0,0.12)]
+                  group-active/card:translate-y-0
+                  group-active/card:scale-[0.98]
+                "
+              >
+                Comprar
+              </Link>
+            )}
           </div>
         </div>
-      </Link>
+      </div>
     </article>
   );
 }

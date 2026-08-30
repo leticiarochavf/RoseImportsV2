@@ -6,7 +6,6 @@ import { whatsappContactUrl } from "@/lib/whatsapp";
 const CATALOG = [
   ["Perfumes", "/catalogo?categoria=perfumes"],
   ["Cosméticos", "/catalogo?categoria=cosmeticos"],
-  ["Eletrônicos", "/catalogo?categoria=eletronicos"],
   ["Todos os produtos", "/catalogo"],
 ] as const;
 
@@ -19,17 +18,19 @@ const POLICIES = [
 
 export function SiteFooter() {
   return (
-    <footer className="mt-20 border-t border-line bg-ink text-ivory">
-      <div className="mx-auto max-w-7xl px-5 py-12 sm:py-14 lg:px-8">
-        <div className="flex flex-col gap-8 border-b border-ivory/15 pb-10 lg:flex-row lg:items-end lg:justify-between">
-          <div>
+    <footer className="mt-14 border-t border-line bg-ink text-ivory">
+      <div className="mx-auto max-w-7xl px-4 py-9 sm:px-6 sm:py-10 lg:px-8">
+        <div className="grid gap-6 border-b border-ivory/15 pb-7 lg:grid-cols-12 lg:items-center lg:gap-8">
+          <div className="min-w-0 lg:col-span-4">
             <Logo variant="type" className="max-w-44" />
 
-            <p className="mt-4 max-w-md text-sm leading-6 text-ivory/60">
+            <p className="mt-3 max-w-md text-sm leading-6 text-ivory/60">
               {site.tagline}
             </p>
+          </div>
 
-            <p className="mt-5 text-sm font-medium text-ivory">
+          <div className="min-w-0 lg:col-span-4 lg:border-l lg:border-ivory/15 lg:pl-8">
+            <p className="text-sm font-medium text-ivory">
               Precisa de ajuda com seu pedido?
             </p>
 
@@ -38,7 +39,7 @@ export function SiteFooter() {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3 lg:col-span-4 lg:justify-end">
             <a
               href={whatsappContactUrl()}
               target="_blank"
@@ -79,9 +80,12 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="grid gap-10 py-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-12">
-          <nav aria-label="Catálogo">
-            <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-ivory/45">
+        <div className="grid justify-items-center gap-x-8 gap-y-9 py-8 text-center sm:grid-cols-2 lg:grid-cols-12 xl:gap-x-10">
+          <nav
+            aria-label="Catálogo"
+            className="w-full min-w-0 lg:col-span-3 lg:w-fit lg:text-left"
+          >
+            <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-gold-soft/80">
               Catálogo
             </h2>
 
@@ -99,8 +103,8 @@ export function SiteFooter() {
             </ul>
           </nav>
 
-          <div>
-            <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-ivory/45">
+          <div className="w-full min-w-0 lg:col-span-3">
+            <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-gold-soft/80">
               Atendimento
             </h2>
 
@@ -125,8 +129,8 @@ export function SiteFooter() {
             </div>
           </div>
 
-          <div>
-            <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-ivory/45">
+          <div className="w-full min-w-0 lg:col-span-3">
+            <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-gold-soft/80">
               Nossa loja
             </h2>
 
@@ -155,8 +159,11 @@ export function SiteFooter() {
             </a>
           </div>
 
-          <nav aria-label="Institucional">
-            <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-ivory/45">
+          <nav
+            aria-label="Institucional"
+            className="w-full min-w-0 lg:col-span-3 lg:w-fit lg:text-right"
+          >
+            <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-gold-soft/80">
               Institucional
             </h2>
 
@@ -175,7 +182,7 @@ export function SiteFooter() {
           </nav>
         </div>
 
-        <div className="border-t border-ivory/15 pt-6">
+        <div className="border-t border-ivory/15 pt-5">
           <div className="flex flex-col gap-4 text-xs leading-5 text-ivory/40 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p>

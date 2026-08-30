@@ -8,13 +8,13 @@ const ITEMS = [
 export function TrustStrip() {
   return (
     <section className="border-y border-line bg-surface">
-      <div className="mx-auto grid max-w-7xl grid-cols-2 gap-x-5 gap-y-7 px-5 py-7 lg:grid-cols-4 lg:gap-0">
+      <div className="mx-auto grid max-w-7xl grid-cols-2 gap-x-5 gap-y-7 px-4 py-7 sm:px-6 lg:grid-cols-4 lg:gap-0 lg:px-8">
         {ITEMS.map(([title, text], index) => (
           <div
             key={title}
             className={`lg:px-7 ${index > 0 ? "lg:border-l lg:border-line" : ""}`}
           >
-            <p className="text-sm font-medium">{title}</p>
+            <p className="text-sm font-medium text-gold">{title}</p>
             <p className="mt-1 text-xs leading-relaxed text-muted">{text}</p>
           </div>
         ))}

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { CategoryCircles } from "@/components/category-circles";
 import { HeroCarousel } from "@/components/hero-carousel";
-import { ProductCarousel } from "@/components/product-carousel";
-import { ProductImage } from "@/components/product-image";
+import { ProductGrid } from "@/components/product-card";
+import { ProductImageGallery } from "@/components/product-image-gallery";
 import { TrustStrip } from "@/components/trust-strip";
 import {
   getBestSellingProducts,
@@ -82,7 +82,7 @@ export default async function HomePage() {
         <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-14 lg:px-8">
           <div className="flex items-end justify-between gap-5">
             <div>
-              <p className="text-sm text-muted">
+              <p className="text-sm font-semibold text-gold">
                 Produtos que estão fazendo sucesso
               </p>
 
@@ -109,7 +109,7 @@ export default async function HomePage() {
           </div>
 
           <div className="mt-7">
-            <ProductCarousel
+            <ProductGrid
               products={bestSelling}
               priorityCount={4}
             />
@@ -124,7 +124,6 @@ export default async function HomePage() {
         <section className="px-4 py-5 sm:px-6 lg:px-8">
           <div
             className="
-              group
               mx-auto grid max-w-7xl
               overflow-hidden rounded-2xl
               bg-ink text-ivory
@@ -143,7 +142,7 @@ export default async function HomePage() {
                 xl:px-12
               "
             >
-              <p className="text-xs font-semibold text-rose-soft">
+              <p className="text-xs font-semibold text-gold-soft">
                 Destaque Rose Imports
               </p>
 
@@ -245,29 +244,23 @@ export default async function HomePage() {
               className="
                 order-1
                 relative
-                min-h-[260px]
+                h-[300px]
                 overflow-hidden
-                bg-ink-soft
-
-                [&_img]:object-cover
-                [&_img]:transition-transform
-                [&_img]:duration-700
-                [&_img]:ease-out
-
-                group-hover:[&_img]:scale-[1.025]
-
-                sm:min-h-[320px]
+                bg-ivory-deep
+                sm:h-[360px]
                 lg:order-2
-                lg:min-h-[380px]
+                lg:h-[420px]
               "
             >
-              <ProductImage
-                path={editorialProduct.imagePath}
-                alt={
-                  editorialProduct.imageAlt ??
-                  editorialProduct.name
-                }
+              <ProductImageGallery
+                images={editorialProduct.images}
+                fallbackPath={editorialProduct.imagePath}
+                fallbackAlt={editorialProduct.imageAlt}
+                productName={editorialProduct.name}
+                productHref={`/produto/${editorialProduct.slug}`}
                 sizes="(max-width: 1024px) 100vw, 58vw"
+                className="h-full w-full"
+                imageClassName="object-contain object-center p-4 sm:p-6"
               />
             </div>
           </div>
@@ -279,7 +272,7 @@ export default async function HomePage() {
           ===================================================== */}
       <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-14 lg:px-8">
         <div className="mb-7">
-          <p className="text-sm font-semibold text-rose">
+          <p className="text-sm font-semibold text-gold">
             Para descobrir
           </p>
 
@@ -312,7 +305,7 @@ export default async function HomePage() {
               "
               style={{
                 backgroundImage:
-                  'url("/categorias/rose-banner-perfumes.png")',
+                  'url("/categorias/rose-banner-perfumes.png.png")',
               }}
             />
 
@@ -377,7 +370,7 @@ export default async function HomePage() {
               "
               style={{
                 backgroundImage:
-                  'url("/categorias/rose-banner-cosmeticos.png")',
+                  'url("/categorias/rose-banner-cosmeticos.png.png")',
               }}
             />
 

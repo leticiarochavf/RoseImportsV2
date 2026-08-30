@@ -63,7 +63,7 @@ const PRODUCT_SELECT = `
    --------------------------------------------------------------- */
 
 export type ProductCard = {
-  description: ReactNode;
+  description: string | null;
   id: string;
   name: string;
   slug: string;
@@ -76,6 +76,7 @@ export type ProductCard = {
   stock: StockStatusLike;
   imagePath: string | null;
   imageAlt: string | null;
+  images: { path: string; alt: string | null }[];
   variantCount: number;
 };
 
@@ -132,6 +133,7 @@ function toCard(raw: RawProduct): ProductCard {
   const cover = images[0] ?? null;
 
   return {
+    description: raw.description,
     id: raw.id,
     name: raw.name,
     slug: raw.slug,
@@ -143,6 +145,10 @@ function toCard(raw: RawProduct): ProductCard {
     stock: aggregateStockStatus(variants.map((v) => v.stock_quantity)),
     imagePath: cover?.storage_path ?? null,
     imageAlt: cover?.alt_text ?? null,
+    images: images.map((image) => ({
+      path: image.storage_path,
+      alt: image.alt_text,
+    })),
     variantCount: variants.length,
   };
 }
@@ -185,14 +191,50 @@ export type CatalogFilters = {
   familia?: string;
 };
 
+export const CATALOG_PAGE_SIZE = 16;
+
+export type CatalogPage = {
+  products: ProductCard[];
+  total: number;
+};
+
 export async function getCatalogProducts(
   filters: CatalogFilters,
-): Promise<ProductCard[]> {
+  page = 1,
+  pageSize = CATALOG_PAGE_SIZE,
+): Promise<CatalogPage> {
   const supabase = await createClient();
+
+  let categoryId: string | null = null;
+  let familyId: string | null = null;
+
+  if (filters.categoria) {
+    const { data, error } = await supabase
+      .from("categories")
+      .select("id")
+      .eq("slug", filters.categoria)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!data) return { products: [], total: 0 };
+    categoryId = data.id;
+  }
+
+  if (filters.familia) {
+    const { data, error } = await supabase
+      .from("olfactory_families")
+      .select("id")
+      .eq("slug", filters.familia)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (!data) return { products: [], total: 0 };
+    familyId = data.id;
+  }
 
   let query = supabase
     .from("products")
-    .select(PRODUCT_SELECT)
+    .select(PRODUCT_SELECT, { count: "exact" })
     .eq("active", true)
     .order("name");
 
@@ -206,22 +248,31 @@ export async function getCatalogProducts(
     query = query.in("gender", [filters.genero, "unissex"]);
   }
 
-  const { data, error } = await query;
+  if (categoryId) {
+    query = query.eq("category_id", categoryId);
+  }
+
+  if (familyId) {
+    query = query.eq("olfactory_family_id", familyId);
+  }
+
+  const safePage = Math.max(1, Math.trunc(page));
+  const safePageSize = Math.max(1, Math.trunc(pageSize));
+  const from = (safePage - 1) * safePageSize;
+  const to = from + safePageSize - 1;
+
+  const { data, error, count } = await query.range(from, to);
   if (error) throw new Error(error.message);
 
-  let rows = (data ?? []) as unknown as RawProduct[];
-
-  // Categoria e família vêm por slug da relação: filtramos em memória
-  // porque o volume do catálogo é pequeno e evita join extra.
-  if (filters.categoria) {
-    rows = rows.filter((r) => r.categories?.slug === filters.categoria);
-  }
-  if (filters.familia) {
-    rows = rows.filter((r) => r.olfactory_families?.slug === filters.familia);
-  }
+  const rows = (data ?? []) as unknown as RawProduct[];
 
   // Produto sem nenhuma versão ativa não tem o que vender.
-  return rows.filter((r) => r.product_variants.length > 0).map(toCard);
+  return {
+    products: rows
+      .filter((r) => r.product_variants.length > 0)
+      .map(toCard),
+    total: count ?? 0,
+  };
 }
 
 export async function getFeaturedProducts(limit = 8): Promise<ProductCard[]> {

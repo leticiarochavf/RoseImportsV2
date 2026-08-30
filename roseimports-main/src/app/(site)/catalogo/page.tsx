@@ -1,9 +1,12 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { ProductGrid } from "@/components/product-card";
 import { EmptyState } from "@/components/empty-state";
 import { CatalogFilters } from "@/features/catalog/catalog-filters";
 import {
+  CATALOG_PAGE_SIZE,
   getCatalogProducts,
   getCategories,
   getOlfactoryFamilies,
@@ -25,12 +28,139 @@ function first(
   return Array.isArray(value) ? value[0] : value;
 }
 
+function pageNumber(value: string | string[] | undefined): number {
+  const parsed = Number.parseInt(first(value) ?? "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+function pageHref(
+  params: Record<string, string | string[] | undefined>,
+  page: number,
+): string {
+  const next = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    const selected = first(value);
+    if (selected) next.set(key, selected);
+  }
+
+  next.delete("pagina");
+  if (page > 1) next.set("pagina", String(page));
+
+  const query = next.toString();
+  return query ? `/catalogo?${query}` : "/catalogo";
+}
+
+function visiblePages(currentPage: number, totalPages: number) {
+  const pages = Array.from(
+    { length: totalPages },
+    (_, index) => index + 1,
+  ).filter(
+    (page) =>
+      page === 1 ||
+      page === totalPages ||
+      Math.abs(page - currentPage) <= 1,
+  );
+
+  return pages.reduce<(number | "ellipsis")[]>((items, page, index) => {
+    const previous = pages[index - 1];
+    if (previous && page - previous > 1) items.push("ellipsis");
+    items.push(page);
+    return items;
+  }, []);
+}
+
+function CatalogPagination({
+  currentPage,
+  totalPages,
+  params,
+}: {
+  currentPage: number;
+  totalPages: number;
+  params: Record<string, string | string[] | undefined>;
+}) {
+  if (totalPages <= 1) return null;
+
+  const controlClass =
+    "inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-line-strong px-3 text-sm font-semibold transition-colors hover:border-rose hover:text-rose";
+
+  return (
+    <nav
+      aria-label="Paginação do catálogo"
+      className="mt-10 flex flex-wrap items-center justify-center gap-2"
+    >
+      {currentPage > 1 ? (
+        <Link
+          href={pageHref(params, currentPage - 1)}
+          className={`${controlClass} bg-surface`}
+          rel="prev"
+          aria-label="Página anterior"
+        >
+          <span aria-hidden>←</span>
+        </Link>
+      ) : (
+        <span
+          aria-disabled="true"
+          className={`${controlClass} cursor-not-allowed bg-surface opacity-40`}
+        >
+          <span aria-hidden>←</span>
+        </span>
+      )}
+
+      {visiblePages(currentPage, totalPages).map((item, index) =>
+        item === "ellipsis" ? (
+          <span
+            key={`ellipsis-${index}`}
+            className="inline-flex min-h-11 min-w-8 items-center justify-center text-muted"
+            aria-hidden
+          >
+            …
+          </span>
+        ) : (
+          <Link
+            key={item}
+            href={pageHref(params, item)}
+            aria-current={item === currentPage ? "page" : undefined}
+            aria-label={`Ir para a página ${item}`}
+            className={`${controlClass} ${
+              item === currentPage
+                ? "border-rose bg-rose text-white hover:bg-rose-deep hover:text-white"
+                : "bg-surface"
+            }`}
+          >
+            {item}
+          </Link>
+        ),
+      )}
+
+      {currentPage < totalPages ? (
+        <Link
+          href={pageHref(params, currentPage + 1)}
+          className={`${controlClass} bg-surface`}
+          rel="next"
+          aria-label="Próxima página"
+        >
+          <span aria-hidden>→</span>
+        </Link>
+      ) : (
+        <span
+          aria-disabled="true"
+          className={`${controlClass} cursor-not-allowed bg-surface opacity-40`}
+        >
+          <span aria-hidden>→</span>
+        </span>
+      )}
+    </nav>
+  );
+}
+
 export default async function CatalogoPage({
   searchParams,
 }: {
   searchParams: SearchParams;
 }) {
   const params = await searchParams;
+  const currentPage = pageNumber(params.pagina);
 
   const filters = {
     q: first(params.q),
@@ -39,11 +169,18 @@ export default async function CatalogoPage({
     familia: first(params.familia),
   };
 
-  const [products, categories, families] = await Promise.all([
-    getCatalogProducts(filters),
+  const [catalog, categories, families] = await Promise.all([
+    getCatalogProducts(filters, currentPage, CATALOG_PAGE_SIZE),
     getCategories(),
     getOlfactoryFamilies(),
   ]);
+
+  const { products, total } = catalog;
+  const totalPages = Math.ceil(total / CATALOG_PAGE_SIZE);
+
+  if (totalPages > 0 && currentPage > totalPages) {
+    redirect(pageHref(params, totalPages));
+  }
 
   const hasFilters = Object.values(filters).some(Boolean);
 
@@ -75,9 +212,9 @@ export default async function CatalogoPage({
           role="status"
           aria-live="polite"
         >
-          {products.length === 1
+          {total === 1
             ? "1 produto encontrado"
-            : `${products.length} produtos encontrados`}
+            : `${total} produtos encontrados`}
         </p>
       </div>
 
@@ -103,6 +240,12 @@ export default async function CatalogoPage({
           />
         )}
       </section>
+
+      <CatalogPagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        params={params}
+      />
     </main>
   );
 }

@@ -49,7 +49,9 @@ export function CategoryCircles() {
                 max-w-[240px]
                 overflow-hidden
                 rounded-full
-                bg-ivory-deep
+                border border-line
+                bg-surface
+                shadow-[0_6px_24px_rgba(0,0,0,0.05)]
                 transition-all
                 duration-300
                 ease-out
@@ -63,7 +65,7 @@ export function CategoryCircles() {
                 fill
                 sizes="(max-width: 640px) 45vw, 24vw"
                 className="
-                  object-cover
+                  object-cover object-center
                   transition-transform
                   duration-700
                   ease-out
