@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ProductImage } from "@/components/product-image";
-import type { ProductCard } from "@/features/catalog/queries";
+import { useHomePicks } from "@/features/home/home-picks";
 import { formatCents } from "@/lib/money";
+
+/** Tempo que cada destaque fica em tela antes de passar para o seguinte. */
+const AUTOPLAY_MS = 7000;
 
 const DEFAULT_DESCRIPTION =
   "Conheça uma seleção especial da Rose Imports e confira as opções disponíveis.";
@@ -75,12 +78,33 @@ function formatHeroMeta(name: string) {
     .join(" · ");
 }
 
-export function HeroCarousel({
-  products,
-}: {
-  products: ProductCard[];
-}) {
+export function HeroCarousel() {
+  const { hero: products, ready } = useHomePicks();
   const [activeIndex, setActiveIndex] = useState(0);
+  // Incrementado só na troca manual, para reiniciar a contagem sem
+  // recriar o intervalo a cada passagem automática.
+  const [manualToken, setManualToken] = useState(0);
+  const total = products.length;
+
+  // Se o sorteio mudar a quantidade de destaques, o índice anterior
+  // pode apontar para fora da lista.
+  useEffect(() => {
+    setActiveIndex((index) => (index < total ? index : 0));
+  }, [total]);
+
+  // O intervalo não depende do índice: recriá-lo a cada passagem somaria
+  // o tempo de render ao ciclo. Só a troca manual reinicia a contagem.
+  useEffect(() => {
+    if (total <= 1) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const timer = window.setInterval(
+      () => setActiveIndex((index) => (index + 1) % total),
+      AUTOPLAY_MS,
+    );
+
+    return () => window.clearInterval(timer);
+  }, [total, manualToken]);
 
   if (products.length === 0) {
     return (
@@ -154,10 +178,9 @@ export function HeroCarousel({
 
   if (!product) return null;
 
-  const total = products.length;
-
   const goTo = (index: number) => {
     setActiveIndex((index + total) % total);
+    setManualToken((token) => token + 1);
   };
 
   const heroTitle = formatHeroTitle(product.name);
@@ -167,12 +190,13 @@ export function HeroCarousel({
     <section
       aria-roledescription="carrossel"
       aria-label="Destaques da Rose Imports"
-      className="
+      className={`
         grid overflow-hidden
         bg-surface
         lg:h-[512px]
         lg:grid-cols-[0.9fr_1.1fr]
-      "
+        ${ready ? "" : "opacity-0"}
+      `}
     >
       {/* IMAGEM */}
       <div
@@ -192,7 +216,7 @@ export function HeroCarousel({
           alt={product.imageAlt ?? product.name}
           sizes="(max-width: 1024px) 100vw, 45vw"
           priority
-          className="object-contain object-center p-3 sm:p-4 lg:p-5"
+          className="object-contain object-center"
         />
 
         {/* Overlay */}

@@ -52,7 +52,7 @@ export function ProductImageGallery({
   sizes,
   priority = false,
   className = "relative",
-  imageClassName = "object-contain object-center p-3",
+  imageClassName = "object-contain object-center",
 }: ProductImageGalleryProps) {
   const [selected, setSelected] = useState(0);
   const current = images[selected] ?? images[0] ?? null;

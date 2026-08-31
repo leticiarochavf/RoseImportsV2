@@ -34,7 +34,7 @@ export function ProductCard({
             sizes="(max-width: 640px) 72vw, (max-width: 1024px) 42vw, 23vw"
             priority={priority}
             className="absolute inset-0"
-            imageClassName="object-contain object-center p-3 sm:p-4"
+            imageClassName="object-contain object-center"
           />
 
           {product.promotional && !soldOut && (

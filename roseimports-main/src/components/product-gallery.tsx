@@ -42,7 +42,7 @@ export function ProductGallery({
                 path={image.path}
                 alt={image.alt ?? productName}
                 sizes="80px"
-                className="object-contain object-center p-2"
+                className="object-contain object-center"
               />
             </button>
           ))}
@@ -55,7 +55,7 @@ export function ProductGallery({
           alt={current?.alt ?? productName}
           sizes="(max-width: 1024px) 100vw, 52vw"
           priority
-          className="object-contain object-center p-4 sm:p-6"
+          className="object-contain object-center"
         />
 
         {hasGallery && (

@@ -385,6 +385,51 @@ export async function getNewProducts(limit = 8): Promise<ProductCard[]> {
     .map(toCard);
 }
 
+
+/* ---------------------------------------------------------------
+   Universo de produtos que a Home pode sortear.
+
+   O sorteio dos destaques acontece no cliente, então o servidor
+   precisa entregar o catálogo inteiro — e não só os mais recentes,
+   senão os produtos antigos nunca apareceriam.
+
+   Acima de POOL_MAX o acervo não cabe num payload razoável: a
+   janela desliza a cada intervalo de revalidação, de modo que todo
+   o catálogo circula ao longo do dia.
+   --------------------------------------------------------------- */
+
+const POOL_MAX = 60;
+const POOL_WINDOW_MS = 60_000;
+
+export async function getProductPool(limit = POOL_MAX): Promise<ProductCard[]> {
+  const supabase = await createClient();
+
+  const { count } = await supabase
+    .from("products")
+    .select("id", { count: "exact", head: true })
+    .eq("active", true);
+
+  const total = count ?? 0;
+
+  let from = 0;
+  if (total > limit) {
+    const windows = Math.ceil(total / limit);
+    from = (Math.floor(Date.now() / POOL_WINDOW_MS) % windows) * limit;
+  }
+
+  const { data, error } = await supabase
+    .from("products")
+    .select(PRODUCT_SELECT)
+    .eq("active", true)
+    .order("created_at", { ascending: false })
+    .range(from, from + limit - 1);
+
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as unknown as RawProduct[])
+    .filter((r) => r.product_variants.length > 0)
+    .map(toCard);
+}
 export async function getProductBySlug(
   slug: string,
 ): Promise<ProductDetail | null> {
