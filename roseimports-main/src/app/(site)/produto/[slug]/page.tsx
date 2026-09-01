@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { FavoriteButton } from "@/components/favorite-button";
 import { ProductGallery } from "@/components/product-gallery";
 import { TrustStrip } from "@/components/trust-strip";
 import { VariantSelector } from "@/features/product/variant-selector";
@@ -70,7 +71,15 @@ export default async function ProdutoPage({ params }: { params: Params }) {
                 {product.brand && product.categoryName && <span aria-hidden>·</span>}
                 {product.categoryName && <span>{product.categoryName}</span>}
               </div>
-              <h1 className="mt-3 text-3xl leading-[1.08] sm:text-4xl lg:text-[2.65rem]">{product.name}</h1>
+              <div className="mt-3 flex items-start justify-between gap-4">
+                <h1 className="text-3xl leading-[1.08] sm:text-4xl lg:text-[2.65rem]">{product.name}</h1>
+
+                <FavoriteButton
+                  productId={product.id}
+                  productName={product.name}
+                  className="mt-1 shrink-0"
+                />
+              </div>
             </header>
 
             <div className="mt-7 border-t border-line pt-7">

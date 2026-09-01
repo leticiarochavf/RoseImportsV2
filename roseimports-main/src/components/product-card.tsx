@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FavoriteButton } from "@/components/favorite-button";
 import { ProductImageGallery } from "@/components/product-image-gallery";
 import { StockBadge } from "@/components/stock-badge";
 import { formatCents } from "@/lib/money";
@@ -35,6 +36,12 @@ export function ProductCard({
             priority={priority}
             className="absolute inset-0"
             imageClassName="object-contain object-center"
+          />
+
+          <FavoriteButton
+            productId={product.id}
+            productName={product.name}
+            className="absolute right-3 top-3 z-30"
           />
 
           {product.promotional && !soldOut && (

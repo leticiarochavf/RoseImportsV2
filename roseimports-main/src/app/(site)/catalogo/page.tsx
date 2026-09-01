@@ -11,11 +11,12 @@ import {
   getCategories,
   getOlfactoryFamilies,
 } from "@/features/catalog/queries";
+import { parseCatalogSort, parsePriceParam } from "@/features/catalog/sorting";
 
 export const metadata: Metadata = {
   title: "Catálogo",
   description:
-    "Perfumes, cosméticos, eletrônicos e acessórios importados disponíveis na Rose Imports.",
+    "Perfumes, body splash e cosméticos importados disponíveis na Rose Imports.",
 };
 
 type SearchParams = Promise<
@@ -162,15 +163,28 @@ export default async function CatalogoPage({
   const params = await searchParams;
   const currentPage = pageNumber(params.pagina);
 
+  // A URL traz o preço em reais, que é o que a pessoa digita; a consulta
+  // trabalha em centavos, como todo valor monetário do projeto.
+  const precoMinRaw = parsePriceParam(first(params.preco_min));
+  const precoMaxRaw = parsePriceParam(first(params.preco_max));
+
+  // Faixa invertida não pode zerar a listagem: os extremos trocam de lugar.
+  const inverted =
+    precoMinRaw !== null && precoMaxRaw !== null && precoMinRaw > precoMaxRaw;
+
   const filters = {
     q: first(params.q),
     categoria: first(params.categoria),
     genero: first(params.genero),
     familia: first(params.familia),
+    precoMin: inverted ? precoMaxRaw : precoMinRaw,
+    precoMax: inverted ? precoMinRaw : precoMaxRaw,
   };
 
+  const sort = parseCatalogSort(first(params.ordenar));
+
   const [catalog, categories, families] = await Promise.all([
-    getCatalogProducts(filters, currentPage, CATALOG_PAGE_SIZE),
+    getCatalogProducts(filters, currentPage, CATALOG_PAGE_SIZE, sort),
     getCategories(),
     getOlfactoryFamilies(),
   ]);
@@ -182,7 +196,10 @@ export default async function CatalogoPage({
     redirect(pageHref(params, totalPages));
   }
 
-  const hasFilters = Object.values(filters).some(Boolean);
+  const hasFilters = Object.values(filters).some(
+    (value) => value !== undefined && value !== null && value !== "",
+  );
+  const hasPriceFilter = filters.precoMin !== null || filters.precoMax !== null;
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
@@ -192,8 +209,8 @@ export default async function CatalogoPage({
         </h1>
 
         <p className="mt-3 text-sm leading-6 text-muted sm:text-base">
-          Encontre perfumes, cosméticos, eletrônicos e acessórios selecionados
-          pela Rose Imports.
+          Encontre perfumes, body splash e cosméticos selecionados pela
+          Rose Imports.
         </p>
       </header>
 
@@ -223,6 +240,13 @@ export default async function CatalogoPage({
           <ProductGrid
             products={products}
             priorityCount={4}
+          />
+        ) : hasPriceFilter ? (
+          <EmptyState
+            title="Nenhum produto nessa faixa de preço"
+            description="Nenhum produto do catálogo tem preço dentro dos valores informados. Amplie a faixa ou limpe os filtros para ver todas as opções."
+            actionLabel="Limpar filtros"
+            actionHref="/catalogo"
           />
         ) : hasFilters ? (
           <EmptyState

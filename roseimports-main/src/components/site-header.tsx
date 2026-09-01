@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/logo";
 import { CartLink } from "@/components/cart-link";
 import { AdminLink } from "@/components/admin-link";
+import { FavoritesCount } from "@/components/favorites-count";
 import { whatsappContactUrl } from "@/lib/whatsapp";
 
 const NAV = [
@@ -156,20 +157,24 @@ export function SiteHeader() {
                 sm:px-3
               "
             >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="transition-transform duration-200 group-hover:scale-110"
-                aria-hidden
-              >
-                <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
-              </svg>
+              <span className="relative">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="transition-transform duration-200 group-hover:scale-110"
+                  aria-hidden
+                >
+                  <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z" />
+                </svg>
+
+                <FavoritesCount />
+              </span>
 
               <span className="hidden 2xl:inline">Favoritos</span>
             </Link>

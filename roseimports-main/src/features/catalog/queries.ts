@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
+import { searchOrFilters } from "@/lib/search";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { aggregateStockStatus, stockStatus } from "@/lib/stock";
+import type { CatalogSort } from "@/features/catalog/sorting";
 import type {
   Category,
   Gender,
@@ -189,7 +191,67 @@ export type CatalogFilters = {
   categoria?: string;
   genero?: string;
   familia?: string;
+  /** Faixa de preço em centavos, como todo valor monetário do projeto. */
+  precoMin?: number | null;
+  precoMax?: number | null;
 };
+
+/**
+ * Preço de referência do produto: o menor entre as versões ativas, que é
+ * o mesmo `fromPriceCents` exibido no card. Vitrine, filtro e ordenação
+ * usam este número — admin e loja não podem discordar sobre qual produto
+ * é o mais barato.
+ */
+function matchesPriceRange(
+  priceCents: number | null,
+  min?: number | null,
+  max?: number | null,
+) {
+  if (min == null && max == null) return true;
+  // Sem preço não há como afirmar que cabe na faixa pedida.
+  if (priceCents == null) return false;
+  if (min != null && priceCents < min) return false;
+  if (max != null && priceCents > max) return false;
+  return true;
+}
+
+function byName(a: ProductCard, b: ProductCard) {
+  return a.name.localeCompare(b.name, "pt-BR");
+}
+
+/**
+ * Produto sem preço válido vai sempre para o fim das ordenações por
+ * preço, nunca para o começo.
+ */
+function byPrice(direction: 1 | -1) {
+  return (a: ProductCard, b: ProductCard) => {
+    const left = a.fromPriceCents;
+    const right = b.fromPriceCents;
+
+    if (left == null && right == null) return byName(a, b);
+    if (left == null) return 1;
+    if (right == null) return -1;
+
+    return left === right ? byName(a, b) : (left - right) * direction;
+  };
+}
+
+function sortProducts(products: ProductCard[], sort: CatalogSort) {
+  const ordered = [...products];
+
+  switch (sort) {
+    case "preco-asc":
+      return ordered.sort(byPrice(1));
+    case "preco-desc":
+      return ordered.sort(byPrice(-1));
+    case "nome":
+      return ordered.sort(byName);
+    default:
+      // A consulta já vem ordenada por nome; a ordem da loja passa a ser
+      // definida aqui quando a configuração da vitrine existir.
+      return ordered;
+  }
+}
 
 export const CATALOG_PAGE_SIZE = 16;
 
@@ -202,6 +264,7 @@ export async function getCatalogProducts(
   filters: CatalogFilters,
   page = 1,
   pageSize = CATALOG_PAGE_SIZE,
+  sort: CatalogSort = "padrao",
 ): Promise<CatalogPage> {
   const supabase = await createClient();
 
@@ -232,46 +295,81 @@ export async function getCatalogProducts(
     familyId = data.id;
   }
 
-  let query = supabase
-    .from("products")
-    .select(PRODUCT_SELECT, { count: "exact" })
-    .eq("active", true)
-    .order("name");
+  const applyFilters = <
+    T extends {
+      or: (filters: string) => T;
+      in: (column: string, values: string[]) => T;
+      eq: (column: string, value: string) => T;
+    },
+  >(
+    builder: T,
+  ): T => {
+    let next = builder;
 
-  if (filters.q?.trim()) {
-    const term = filters.q.trim();
-    // ilike é case-insensitive; cobre nome e marca. (§45)
-    query = query.or(`name.ilike.%${term}%,brand.ilike.%${term}%`);
-  }
+    // ilike é case-insensitive; cobre nome e marca. O termo vai escapado e
+    // quebrado em palavras — vírgula e parêntese são sintaxe do PostgREST,
+    // não texto de busca. (§45)
+    for (const filter of searchOrFilters(filters.q ?? "")) {
+      next = next.or(filter);
+    }
 
-  if (filters.genero === "feminino" || filters.genero === "masculino") {
-    query = query.in("gender", [filters.genero, "unissex"]);
-  }
+    if (filters.genero === "feminino" || filters.genero === "masculino") {
+      next = next.in("gender", [filters.genero, "unissex"]);
+    }
 
-  if (categoryId) {
-    query = query.eq("category_id", categoryId);
-  }
+    if (categoryId) {
+      next = next.eq("category_id", categoryId);
+    }
 
-  if (familyId) {
-    query = query.eq("olfactory_family_id", familyId);
-  }
+    if (familyId) {
+      next = next.eq("olfactory_family_id", familyId);
+    }
 
-  const safePage = Math.max(1, Math.trunc(page));
-  const safePageSize = Math.max(1, Math.trunc(pageSize));
-  const from = (safePage - 1) * safePageSize;
-  const to = from + safePageSize - 1;
+    return next;
+  };
 
-  const { data, error, count } = await query.range(from, to);
+  /*
+     Ordem por preço e filtro por faixa não podem ser resolvidos no banco:
+     o preço mora em product_variants, e o PostgREST não ordena nem filtra
+     por agregado de tabela relacionada. Trazemos o conjunto filtrado
+     inteiro e resolvemos aqui — ainda no servidor, ainda antes de paginar,
+     que é o que garante "os mais baratos do catálogo" e não "os mais
+     baratos desta página".
+
+     Isso é adequado à escala atual (dezenas de produtos). Passando da
+     ordem de mil, o caminho é uma coluna min_price_cents mantida por
+     trigger, aí a ordenação volta para o banco.
+  */
+  const { data, error } = await applyFilters(
+    supabase
+      .from("products")
+      .select(PRODUCT_SELECT)
+      .eq("active", true)
+      .order("name"),
+  );
+
   if (error) throw new Error(error.message);
 
   const rows = (data ?? []) as unknown as RawProduct[];
 
   // Produto sem nenhuma versão ativa não tem o que vender.
+  const all = rows
+    .filter((r) => r.product_variants.length > 0)
+    .map(toCard);
+
+  const withinRange = all.filter((product) =>
+    matchesPriceRange(product.fromPriceCents, filters.precoMin, filters.precoMax),
+  );
+
+  const ordered = sortProducts(withinRange, sort);
+
+  const safePage = Math.max(1, Math.trunc(page));
+  const safePageSize = Math.max(1, Math.trunc(pageSize));
+  const from = (safePage - 1) * safePageSize;
+
   return {
-    products: rows
-      .filter((r) => r.product_variants.length > 0)
-      .map(toCard),
-    total: count ?? 0,
+    products: ordered.slice(from, from + safePageSize),
+    total: ordered.length,
   };
 }
 

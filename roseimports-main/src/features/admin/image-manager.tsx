@@ -27,6 +27,32 @@ const ACCEPTED = [
   "image/avif",
 ];
 
+/**
+ * Nome único para o arquivo no Storage.
+ *
+ * `crypto.randomUUID` só existe em contexto seguro — HTTPS ou localhost.
+ * Quem abre o painel pelo IP da máquina na rede local não tem essa função,
+ * e o upload quebrava ali. `getRandomValues` não tem essa restrição, então
+ * cobre o caso sem abrir mão de aleatoriedade criptográfica; o último
+ * fallback vale apenas para ambientes sem Web Crypto algum.
+ */
+function uploadId(): string {
+  const webCrypto = globalThis.crypto;
+
+  if (typeof webCrypto?.randomUUID === "function") {
+    return webCrypto.randomUUID();
+  }
+
+  if (typeof webCrypto?.getRandomValues === "function") {
+    const bytes = webCrypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function ImageManager({
   productId,
   images,
@@ -130,7 +156,7 @@ export function ImageManager({
         "jpg";
 
       const path =
-        `${productId}/${crypto.randomUUID()}.${extension}`;
+        `${productId}/${uploadId()}.${extension}`;
 
       const { error } =
         await supabase.storage

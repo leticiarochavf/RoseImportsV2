@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdminUser } from "@/lib/auth/admin";
 import { StockRow } from "@/features/admin/stock-row";
+import { getCatalogCounts } from "@/features/admin/metrics";
 
 export const metadata: Metadata = { title: "Estoque" };
 export const dynamic = "force-dynamic";
@@ -45,6 +46,7 @@ export default async function EstoquePage({
   } = await searchParams;
 
   const supabase = await createClient();
+  const counts = await getCatalogCounts();
 
   const { data, error } = await supabase
     .from("product_variants")
@@ -223,13 +225,18 @@ export default async function EstoquePage({
           overflow-hidden
           border border-line
           bg-line
-          md:grid-cols-4
+          md:grid-cols-5
         "
         aria-label="Resumo do estoque"
       >
         <SummaryItem
           label="Produtos ativos"
-          value={ativos.length}
+          value={counts.produtosAtivos}
+        />
+
+        <SummaryItem
+          label="Versões ativas"
+          value={counts.variantesAtivas}
         />
 
         <SummaryItem

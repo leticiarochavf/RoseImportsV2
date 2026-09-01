@@ -166,7 +166,7 @@ export function CheckoutForm() {
           href={success.whatsappUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-7 inline-block w-full bg-ink px-8 py-4 text-xs tracking-[0.18em] text-ivory uppercase transition-opacity hover:opacity-85"
+          className="mt-7 inline-block w-full bg-rose px-8 py-4 text-xs tracking-[0.18em] text-white uppercase transition-colors hover:bg-rose-deep"
         >
           Abrir WhatsApp
         </a>
@@ -492,7 +492,7 @@ export function CheckoutForm() {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-6 w-full bg-ink px-6 py-4 text-xs tracking-[0.18em] text-ivory uppercase transition-opacity hover:opacity-85 disabled:opacity-50"
+            className="mt-6 w-full bg-rose px-6 py-4 text-xs tracking-[0.18em] text-white uppercase transition-colors hover:bg-rose-deep disabled:opacity-50"
           >
             {submitting ? "Conferindo disponibilidade…" : "Finalizar no WhatsApp"}
           </button>

@@ -133,9 +133,9 @@ export default async function HomePage() {
               className="
                 absolute inset-0
                 bg-gradient-to-t
-                from-black/70
-                via-black/15
-                to-transparent
+                from-black/85
+                via-black/40
+                to-black/10
               "
             />
 
@@ -198,9 +198,9 @@ export default async function HomePage() {
               className="
                 absolute inset-0
                 bg-gradient-to-t
-                from-black/65
-                via-black/10
-                to-transparent
+                from-black/85
+                via-black/40
+                to-black/10
               "
             />
 

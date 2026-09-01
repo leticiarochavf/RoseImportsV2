@@ -2,8 +2,10 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdminUser } from "@/lib/auth/admin";
+import { getCatalogCounts } from "@/features/admin/metrics";
 import { ProductRowActions } from "@/features/admin/product-row-actions";
 import { ProductImage } from "@/components/product-image";
+import { searchOrFilters } from "@/lib/search";
 
 export const metadata: Metadata = { title: "Produtos" };
 export const dynamic = "force-dynamic";
@@ -73,12 +75,10 @@ export default async function ProdutosPage({
     `)
     .order("name");
 
-  if (q.trim()) {
-    const term = q.trim();
-
-    query = query.or(
-      `name.ilike.%${term}%,brand.ilike.%${term}%`,
-    );
+  // Termo escapado e quebrado em palavras: vírgula, parêntese e ponto são
+  // sintaxe do PostgREST e quebrariam a consulta se fossem interpolados.
+  for (const filter of searchOrFilters(q)) {
+    query = query.or(filter);
   }
 
   const { data, error } = await query;
@@ -89,12 +89,9 @@ export default async function ProdutosPage({
 
   const products = (data ?? []) as unknown as Row[];
 
-  const ativos = products.filter(
-    (product) => product.active,
-  ).length;
-
-  const inativos =
-    products.length - ativos;
+  // Mesma fonte da tela de Estoque: os dois painéis não podem discordar.
+  // Vale o catálogo inteiro, não a busca corrente — é um resumo da loja.
+  const counts = await getCatalogCounts();
 
   const semEstoque = products.filter(
     (product) => {
@@ -166,22 +163,22 @@ export default async function ProdutosPage({
         "
       >
         <SummaryItem
-          label="Total"
-          value={products.length}
+          label="Produtos cadastrados"
+          value={counts.produtosTotal}
         />
 
         <SummaryItem
-          label="Ativos"
-          value={ativos}
+          label="Produtos ativos"
+          value={counts.produtosAtivos}
         />
 
         <SummaryItem
-          label="Inativos"
-          value={inativos}
+          label="Produtos inativos"
+          value={counts.produtosTotal - counts.produtosAtivos}
         />
 
         <SummaryItem
-          label="Sem estoque"
+          label="Ativos sem estoque"
           value={semEstoque}
         />
       </section>

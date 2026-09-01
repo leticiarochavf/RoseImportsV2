@@ -23,7 +23,7 @@ export default async function NovoProdutoPage() {
   supabase
     .from("categories")
     .select("id, name, slug")
-    .neq("slug", "eletronicos")
+    .eq("active", true)
     .order("sort_order"),
 
   supabase

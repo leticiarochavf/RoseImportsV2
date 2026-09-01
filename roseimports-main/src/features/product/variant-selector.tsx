@@ -166,7 +166,7 @@ export function VariantSelector({
             type="button"
             onClick={handleAdd}
             disabled={!canAdd}
-            className="w-full bg-ink px-8 py-4 text-xs tracking-[0.18em] text-ivory uppercase transition-opacity hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-40"
+            className="w-full bg-rose px-8 py-4 text-xs tracking-[0.18em] text-white uppercase transition-colors hover:bg-rose-deep disabled:cursor-not-allowed disabled:opacity-40"
           >
             Adicionar ao carrinho
           </button>

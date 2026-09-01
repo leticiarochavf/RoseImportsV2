@@ -67,7 +67,7 @@ export function CartView() {
             <div className="flex justify-between gap-4"><dt className="text-muted">Entrega</dt><dd className="max-w-36 text-right text-xs text-muted">Confirmada no atendimento</dd></div>
           </dl>
           <div className="mt-5 flex items-baseline justify-between gap-4"><span className="text-sm font-medium">Total dos produtos</span><span className="font-display text-2xl">{formatCents(subtotalCents)}</span></div>
-          <Link href="/finalizar" className="mt-6 flex min-h-12 items-center justify-center bg-ink px-6 text-center text-xs tracking-[0.16em] text-ivory uppercase transition-opacity hover:opacity-85">Finalizar pedido</Link>
+          <Link href="/finalizar" className="mt-6 flex min-h-12 items-center justify-center bg-rose px-6 text-center text-xs tracking-[0.16em] text-white uppercase transition-colors hover:bg-rose-deep">Finalizar pedido</Link>
           <p className="mt-4 text-xs leading-relaxed text-muted">{delivery.note}</p>
         </div>
       </aside>
