@@ -10,7 +10,7 @@ type Row = {
   id: string;
   label: string;
   volume_ml: number | null;
-  price_cents: number;
+  price_cents: number | null;
   stock_quantity: number;
   active: boolean;
 
@@ -266,7 +266,9 @@ export async function GET(request: NextRequest) {
        * o Excel conseguir somar/filtrar.
        */
       preco:
-        row.price_cents / 100,
+        row.price_cents === null
+          ? null
+          : row.price_cents / 100,
 
       quantidade:
         row.stock_quantity,

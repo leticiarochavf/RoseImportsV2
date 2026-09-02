@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
 type VariantRow = {
   id: string;
   label: string;
-  price_cents: number;
+  price_cents: number | null;
   stock_quantity: number;
   active: boolean;
   product_id: string;
@@ -104,7 +104,12 @@ export async function POST(request: Request) {
     const variant = byId.get(variantId);
 
     // Variante removida ou desativada enquanto estava no carrinho.
-    if (!variant || !variant.active || !variant.products?.active) {
+    if (
+      !variant ||
+      !variant.active ||
+      variant.price_cents === null ||
+      !variant.products?.active
+    ) {
       unavailable.push({
         variantId,
         productName: variant?.products?.name ?? "Produto",

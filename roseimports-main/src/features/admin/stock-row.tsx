@@ -24,14 +24,15 @@ export function StockRow({
   productImagePath: string | null;
   variantLabel: string;
   stockQuantity: number;
-  priceCents: number;
+  priceCents: number | null;
   active: boolean;
 }) {
   const [stock, setStock] = useState(String(stockQuantity));
-  const [price, setPrice] = useState(centsToInput(priceCents));
+  const initialPrice = priceCents === null ? "" : centsToInput(priceCents);
+  const [price, setPrice] = useState(initialPrice);
 
   const [savedStock, setSavedStock] = useState(stockQuantity);
-  const [savedPrice, setSavedPrice] = useState(centsToInput(priceCents));
+  const [savedPrice, setSavedPrice] = useState(initialPrice);
 
   const [pending, startTransition] = useTransition();
 
