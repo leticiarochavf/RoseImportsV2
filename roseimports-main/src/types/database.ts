@@ -84,6 +84,11 @@ export type Product = Timestamps & {
   featured: boolean;
 
   promotional: boolean;
+
+  /** Posição na vitrine, definida por arrastar no painel. */
+  showcase_order:
+    | number
+    | null;
 };
 
 export type ProductVariant =

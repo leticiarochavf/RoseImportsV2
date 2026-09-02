@@ -1455,3 +1455,62 @@ function translateDbError(
 
   return "Não foi possível concluir a operação. Tente de novo.";
 }
+/**
+ * Grava a ordem da vitrine a partir da sequência arrastada no painel.
+ *
+ * A posição é o índice na lista, e a lista chega inteira — o painel não
+ * pagina essa tela justamente para que a posição visível corresponda à
+ * real. Regravar tudo é mais simples e mais seguro que calcular quais
+ * itens se moveram, e a tabela tem dezenas de linhas, não milhões.
+ */
+export async function saveShowcaseOrder(
+  orderedIds: string[],
+): Promise<ActionResult> {
+  const supabase = await requireAdmin();
+
+  if (orderedIds.length === 0) {
+    return {
+      ok: false,
+      error: "Nenhum produto para ordenar.",
+    };
+  }
+
+  // Um id repetido faria dois produtos disputarem a mesma posição.
+  if (new Set(orderedIds).size !== orderedIds.length) {
+    return {
+      ok: false,
+      error: "A lista enviada tem produtos repetidos.",
+    };
+  }
+
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase
+        .from("products")
+        .update({ showcase_order: index })
+        .eq("id", id),
+    ),
+  );
+
+  const failed = results.find((result) => result.error);
+
+  if (failed?.error) {
+    return {
+      ok: false,
+      error: translateDbError(failed.error.message),
+    };
+  }
+
+  /*
+     Só o catálogo espelha esta ordem. A Home sorteia os destaques a cada
+     visita, de propósito, e não consulta showcase_order — revalidá-la
+     aqui daria a entender que a vitrine a governa, e não governa.
+  */
+  revalidatePath("/admin/vitrine");
+  revalidatePath("/catalogo");
+
+  return {
+    ok: true,
+    message: "Ordem da vitrine salva.",
+  };
+}

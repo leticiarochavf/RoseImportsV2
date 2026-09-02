@@ -45,6 +45,7 @@ type RawProduct = {
   description: string | null;
   promotional: boolean;
   olfactory_family_id: string | null;
+  showcase_order: number | null;
   categories: { name: string; slug: string } | null;
   olfactory_families: { name: string; slug: string } | null;
   product_variants: RawVariant[];
@@ -53,7 +54,7 @@ type RawProduct = {
 
 const PRODUCT_SELECT = `
   id, name, slug, brand, gender, product_type, description, promotional,
-  olfactory_family_id,
+  olfactory_family_id, showcase_order,
   categories ( name, slug ),
   olfactory_families ( name, slug ),
   product_variants ( id, label, volume_ml, variant_type, price_cents, stock_quantity, sort_order ),
@@ -80,6 +81,8 @@ export type ProductCard = {
   imageAlt: string | null;
   images: { path: string; alt: string | null }[];
   variantCount: number;
+  /** Posição na vitrine definida no painel; nulo vai para o fim. */
+  showcaseOrder: number | null;
 };
 
 export type ProductVariantPublic = {
@@ -152,6 +155,7 @@ function toCard(raw: RawProduct): ProductCard {
       alt: image.alt_text,
     })),
     variantCount: variants.length,
+    showcaseOrder: raw.showcase_order ?? null,
   };
 }
 
@@ -236,6 +240,22 @@ function byPrice(direction: 1 | -1) {
   };
 }
 
+/**
+ * Ordem da vitrine, definida arrastando os produtos no painel. Quem
+ * ainda não foi posicionado vai para o fim, em ordem alfabética — é o
+ * que faz produto novo entrar no fim da vitrine, nunca no começo.
+ */
+function byShowcase(a: ProductCard, b: ProductCard) {
+  const left = a.showcaseOrder;
+  const right = b.showcaseOrder;
+
+  if (left == null && right == null) return byName(a, b);
+  if (left == null) return 1;
+  if (right == null) return -1;
+
+  return left === right ? byName(a, b) : left - right;
+}
+
 function sortProducts(products: ProductCard[], sort: CatalogSort) {
   const ordered = [...products];
 
@@ -247,9 +267,7 @@ function sortProducts(products: ProductCard[], sort: CatalogSort) {
     case "nome":
       return ordered.sort(byName);
     default:
-      // A consulta já vem ordenada por nome; a ordem da loja passa a ser
-      // definida aqui quando a configuração da vitrine existir.
-      return ordered;
+      return ordered.sort(byShowcase);
   }
 }
 
@@ -577,4 +595,26 @@ export async function getOlfactoryFamilies(): Promise<OlfactoryFamily[]> {
 
   if (error) throw new Error(error.message);
   return (data ?? []) as OlfactoryFamily[];
+}
+
+/**
+ * Produtos ativos na ordem da vitrine, para a tela de organização do
+ * painel. Vem tudo de uma vez: a ordenação por arrastar não sobrevive
+ * a paginação — a posição visível não corresponderia à posição real.
+ */
+export async function getShowcaseProducts(): Promise<ProductCard[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("products")
+    .select(PRODUCT_SELECT)
+    .eq("active", true)
+    .order("name");
+
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as unknown as RawProduct[])
+    .filter((r) => r.product_variants.length > 0)
+    .map(toCard)
+    .sort(byShowcase);
 }
