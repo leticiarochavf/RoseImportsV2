@@ -11,6 +11,7 @@ const NAV = [
   { href: "/admin/estoque", label: "Estoque" },
   { href: "/admin/produtos", label: "Produtos" },
   { href: "/admin/vitrine", label: "Vitrine" },
+  { href: "/admin/cupons", label: "Cupons" },
 ];
 
 /**

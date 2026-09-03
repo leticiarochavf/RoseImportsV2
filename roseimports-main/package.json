@@ -9,7 +9,9 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "create-admin": "tsx scripts/create-admin.ts",
-    "db:types": "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID --schema public > src/types/database.ts"
+    "db:types": "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID --schema public > src/types/database.ts",
+    "test": "vitest run",
+    "test:coupons-concurrency": "tsx scripts/test-coupons-concurrency.mts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
@@ -24,13 +26,16 @@
     "@eslint/eslintrc": "^3.2.0",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.9.0",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "dotenv": "^16.4.5",
     "eslint": "^9",
     "eslint-config-next": "^15.1.0",
+    "pg": "^8.23.0",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.11"
   }
 }

@@ -25,6 +25,12 @@ type OrderRow = {
   neighborhood: string | null;
   payment_method: PaymentMethod;
   subtotal_cents: number;
+  /* Snapshot do cupom: o desconto deste pedido não muda mais, nem se o
+     cupom for editado, desativado ou apagado depois. */
+  coupon_code_snapshot: string | null;
+  coupon_discount_percent_snapshot: number | null;
+  discount_cents: number;
+  total_cents: number;
   status: OrderStatus;
   paid_at: string | null;
   created_at: string;
@@ -53,7 +59,9 @@ export default async function PedidoPage({
     .from("orders")
     .select(
       `id, order_number, customer_name, fulfillment_type, neighborhood,
-       payment_method, subtotal_cents, status, paid_at, created_at,
+       payment_method, subtotal_cents, coupon_code_snapshot,
+       coupon_discount_percent_snapshot, discount_cents, total_cents,
+       status, paid_at, created_at,
        order_items ( id, product_name_snapshot, variant_label_snapshot,
                      unit_price_cents_snapshot, quantity, subtotal_cents )`,
     )
@@ -111,10 +119,38 @@ export default async function PedidoPage({
 
             <div className="flex justify-between border-t border-line px-5 py-4">
               <span className="eyebrow">Subtotal</span>
-              <span className="font-display text-xl">
+              <span
+                className={
+                  order.coupon_code_snapshot
+                    ? "text-sm text-muted"
+                    : "font-display text-xl"
+                }
+              >
                 {formatCents(order.subtotal_cents)}
               </span>
             </div>
+
+            {order.coupon_code_snapshot && (
+              <>
+                <div className="flex justify-between px-5 pb-2">
+                  <span className="eyebrow">
+                    Cupom {order.coupon_code_snapshot}
+                    {order.coupon_discount_percent_snapshot !== null &&
+                      ` (${order.coupon_discount_percent_snapshot}%)`}
+                  </span>
+                  <span className="text-sm text-rose">
+                    −{formatCents(order.discount_cents)}
+                  </span>
+                </div>
+
+                <div className="flex justify-between px-5 pb-4">
+                  <span className="eyebrow">Total</span>
+                  <span className="font-display text-xl">
+                    {formatCents(order.total_cents)}
+                  </span>
+                </div>
+              </>
+            )}
           </section>
 
           <p className="mt-3 text-xs text-muted">

@@ -35,7 +35,7 @@ export default async function PedidosPage({
   let query = supabase
     .from("orders")
     .select(
-      "id, order_number, customer_name, fulfillment_type, neighborhood, payment_method, subtotal_cents, status, created_at",
+      "id, order_number, customer_name, fulfillment_type, neighborhood, payment_method, subtotal_cents, discount_cents, total_cents, coupon_code_snapshot, status, created_at",
     )
     .order("created_at", { ascending: false })
     .limit(100);
@@ -119,7 +119,16 @@ export default async function PedidosPage({
                   <td className="px-4 py-3">
                     {PAYMENT_LABEL[order.payment_method as PaymentMethod]}
                   </td>
-                  <td className="px-4 py-3">{formatCents(order.subtotal_cents)}</td>
+                  <td className="px-4 py-3">
+                    {formatCents(order.total_cents)}
+
+                    {order.coupon_code_snapshot && (
+                      <span className="block text-xs text-rose">
+                        {order.coupon_code_snapshot} −
+                        {formatCents(order.discount_cents)}
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <StatusPill status={order.status as OrderStatus} />
                   </td>

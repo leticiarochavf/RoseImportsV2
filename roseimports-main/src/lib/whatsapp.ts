@@ -22,6 +22,14 @@ export type WhatsAppOrder = {
   address: DeliveryAddress | null;
   paymentMethod: PaymentMethod;
   subtotalCents: number;
+  /** Cupom aplicado, já validado e calculado pelo banco. */
+  coupon: {
+    code: string;
+    discountPercent: number;
+    discountCents: number;
+  } | null;
+  /** Subtotal menos o desconto. Sem cupom, é igual ao subtotal. */
+  totalCents: number;
   items: {
     productName: string;
     variantLabel: string;
@@ -55,6 +63,18 @@ export function buildWhatsAppMessage(order: WhatsAppOrder): string {
 
   lines.push("");
   lines.push(`Subtotal: R$ ${formatCentsPlain(order.subtotalCents)}`);
+
+  // Com cupom, o atendimento precisa ver as três linhas: o que era, o
+  // que saiu de desconto e o que ficou.
+  if (order.coupon) {
+    lines.push(
+      `Cupom ${order.coupon.code} (${order.coupon.discountPercent}%): -R$ ${formatCentsPlain(
+        order.coupon.discountCents,
+      )}`,
+    );
+    lines.push(`Total: R$ ${formatCentsPlain(order.totalCents)}`);
+  }
+
   lines.push("");
   lines.push(`Nome: ${order.customerName}`);
   lines.push(`Recebimento: ${FULFILLMENT_LABEL[order.fulfillmentType]}`);

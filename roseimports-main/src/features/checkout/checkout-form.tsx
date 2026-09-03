@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useCart } from "@/features/cart/cart-context";
 import { EmptyState } from "@/components/empty-state";
 import { formatCents } from "@/lib/money";
+import { computeDiscountCents, normalizeCouponCode } from "@/lib/coupons";
 import { delivery } from "@/lib/config/site";
 import { track } from "@/lib/analytics";
 import type { FulfillmentType, PaymentMethod } from "@/types/database";
@@ -20,6 +21,16 @@ type Success = {
   orderNumber: string;
   whatsappUrl: string;
   subtotalCents: number;
+  discountCents: number;
+  totalCents: number;
+  couponCode: string | null;
+  couponDiscountPercent: number | null;
+};
+
+/** Cupom conferido na prévia. O valor que vale é o que o servidor grava. */
+type AppliedCoupon = {
+  code: string;
+  discountPercent: number;
 };
 
 export function CheckoutForm() {
@@ -40,6 +51,12 @@ export function CheckoutForm() {
 
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
+
+  // Cupom: o campo é texto livre; a conferência é do servidor.
+  const [couponInput, setCouponInput] = useState("");
+  const [coupon, setCoupon] = useState<AppliedCoupon | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponChecking, setCouponChecking] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +102,53 @@ export function CheckoutForm() {
     }
   }
 
+  /**
+   * Prévia do desconto. Não reserva nada: entre esta conferência e o
+   * envio do pedido o cupom pode acabar, e é por isso que o servidor
+   * confere de novo na hora de gravar.
+   */
+  async function applyCoupon() {
+    const code = normalizeCouponCode(couponInput);
+
+    if (!code) return;
+
+    setCouponChecking(true);
+    setCouponError(null);
+
+    try {
+      const response = await fetch("/api/cupons/validar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, subtotalCents }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok || !payload.valid) {
+        setCoupon(null);
+        setCouponError(payload.error ?? "Não foi possível conferir o cupom.");
+        return;
+      }
+
+      setCoupon({
+        code: payload.code,
+        discountPercent: payload.discountPercent,
+      });
+      setCouponInput(payload.code);
+    } catch {
+      setCoupon(null);
+      setCouponError("Sem conexão para conferir o cupom.");
+    } finally {
+      setCouponChecking(false);
+    }
+  }
+
+  function removeCoupon() {
+    setCoupon(null);
+    setCouponInput("");
+    setCouponError(null);
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (submitting) return;
@@ -108,6 +172,9 @@ export function CheckoutForm() {
           city: fulfillment === "entrega" ? city : "",
           state: fulfillment === "entrega" ? uf : "",
           paymentMethod: payment,
+          // Só o código. O desconto é calculado pelo servidor a partir
+          // da porcentagem guardada no cupom.
+          couponCode: coupon?.code ?? "",
           // Preço não vai daqui: o servidor busca o valor atual.
           items: items.map((i) => ({
             variantId: i.variantId,
@@ -119,6 +186,15 @@ export function CheckoutForm() {
       const payload = await response.json();
 
       if (!response.ok) {
+        // Cupom recusado na confirmação: some da tela para o cliente
+        // seguir sem ele em vez de tentar o mesmo código de novo.
+        if (payload.couponRejected) {
+          setCoupon(null);
+          setCouponError(payload.error ?? "Cupom recusado.");
+          setError(null);
+          return;
+        }
+
         setError(payload.error ?? "Não foi possível gerar o pedido.");
 
         if (Array.isArray(payload.unavailable)) {
@@ -149,6 +225,16 @@ export function CheckoutForm() {
     }
   }
 
+  /*
+    Prévia do valor. Segue o carrinho: mudou item, o desconto acompanha,
+    porque o percentual é que fica guardado, não o valor.
+  */
+  const discountCents = coupon
+    ? computeDiscountCents(subtotalCents, coupon.discountPercent)
+    : 0;
+
+  const totalCents = subtotalCents - discountCents;
+
   /* -------- Pedido criado -------- */
   if (success) {
     return (
@@ -156,6 +242,14 @@ export function CheckoutForm() {
         <p className="eyebrow">Pedido gerado</p>
         <p className="mt-3 font-display text-4xl">#{success.orderNumber}</p>
         <div className="filete mx-auto mt-5 max-w-40" aria-hidden />
+
+        {success.couponCode && (
+          <p className="mx-auto mt-5 max-w-sm border border-rose-soft bg-rose-wash px-4 py-3 text-sm text-ink-soft">
+            Cupom {success.couponCode} aplicado ({success.couponDiscountPercent}
+            %): −{formatCents(success.discountCents)}. Total:{" "}
+            <span className="text-ink">{formatCents(success.totalCents)}</span>.
+          </p>
+        )}
 
         <p className="mx-auto mt-6 max-w-sm text-sm text-muted">
           Abrimos o WhatsApp com o seu pedido. Se a janela não apareceu, use o
@@ -450,12 +544,102 @@ export function CheckoutForm() {
 
           <div className="filete my-5" aria-hidden />
 
+          {/* -------- Cupom -------- */}
+          <div>
+            <label htmlFor="cupom" className="eyebrow">
+              Cupom de desconto
+            </label>
+
+            {coupon ? (
+              <div className="mt-2.5 flex items-center justify-between gap-3 border border-rose-soft bg-rose-wash px-4 py-3">
+                <span className="min-w-0">
+                  <span className="block truncate text-sm tracking-[0.08em]">
+                    {coupon.code}
+                  </span>
+                  <span className="text-xs text-muted">
+                    {coupon.discountPercent}% de desconto
+                  </span>
+                </span>
+
+                <button
+                  type="button"
+                  onClick={removeCoupon}
+                  className="shrink-0 text-xs tracking-[0.12em] text-muted uppercase hover:text-danger"
+                >
+                  Remover
+                </button>
+              </div>
+            ) : (
+              <div className="mt-2.5 flex gap-2">
+                <input
+                  id="cupom"
+                  name="cupom"
+                  type="text"
+                  maxLength={24}
+                  value={couponInput}
+                  onChange={(e) => {
+                    setCouponInput(normalizeCouponCode(e.target.value));
+                    setCouponError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    // Enter aqui aplica o cupom; não envia o pedido.
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void applyCoupon();
+                    }
+                  }}
+                  placeholder="DUDA10"
+                  className="min-w-0 flex-1 border border-line bg-surface px-4 py-3 text-sm tracking-[0.08em] uppercase focus:border-rose focus:outline-none"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => void applyCoupon()}
+                  disabled={couponChecking || couponInput.trim().length === 0}
+                  className="shrink-0 border border-line-strong px-4 py-3 text-xs tracking-[0.12em] uppercase transition-colors hover:border-ink disabled:opacity-50"
+                >
+                  {couponChecking ? "Conferindo…" : "Aplicar"}
+                </button>
+              </div>
+            )}
+
+            {couponError && (
+              <p role="alert" className="mt-2 text-xs text-danger">
+                {couponError}
+              </p>
+            )}
+          </div>
+
+          <div className="filete my-5" aria-hidden />
+
           <div className="flex items-baseline justify-between">
             <span className="eyebrow">Subtotal</span>
-            <span className="font-display text-2xl">
+            <span
+              className={
+                coupon ? "text-sm text-muted" : "font-display text-2xl"
+              }
+            >
               {formatCents(subtotalCents)}
             </span>
           </div>
+
+          {coupon && (
+            <>
+              <div className="mt-2 flex items-baseline justify-between">
+                <span className="eyebrow">Desconto</span>
+                <span className="text-sm text-rose">
+                  −{formatCents(discountCents)}
+                </span>
+              </div>
+
+              <div className="mt-3 flex items-baseline justify-between">
+                <span className="eyebrow">Total</span>
+                <span className="font-display text-2xl">
+                  {formatCents(totalCents)}
+                </span>
+              </div>
+            </>
+          )}
 
           {error && (
             <div

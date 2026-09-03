@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { normalizeCouponCode } from "@/lib/coupons";
 import { createOrderSchema } from "@/lib/validation/schemas";
 import { buildWhatsAppMessage, buildWhatsAppUrl } from "@/lib/whatsapp";
 
@@ -12,6 +13,12 @@ import { buildWhatsAppMessage, buildWhatsAppUrl } from "@/lib/whatsapp";
  *   3. recalculamos o subtotal — o valor vindo do cliente é ignorado;
  *   4. gravamos com snapshot de nome, versão e preço;
  *   5. devolvemos número e mensagem prontos.
+ *
+ * O cupom segue a mesma regra do preço: o navegador manda só o código
+ * digitado. Quem confere validade e limite, e quem calcula o desconto a
+ * partir da porcentagem guardada, é create_preorder() — dentro da mesma
+ * transação que grava o pedido, então dois clientes usando o último uso
+ * do mesmo cupom nunca passam do limite juntos.
  *
  * Não reserva estoque: o pagamento acontece fora do sistema. (§15)
  */
@@ -27,6 +34,38 @@ type VariantRow = {
   product_id: string;
   products: { name: string; active: boolean } | null;
 };
+
+/**
+ * Recusa de cupom vira frase para o cliente. Devolve null quando o erro
+ * não é de cupom — aí a resposta é a falha genérica, sem detalhe interno.
+ *
+ * A validação que vale é esta, no momento de gravar o pedido: entre
+ * "aplicar cupom" na tela e clicar em finalizar, o cupom pode ter
+ * expirado, esgotado ou sido desativado no painel.
+ */
+function translateCouponError(message: string): string | null {
+  if (message.includes("coupon_not_found")) {
+    return "Cupom não encontrado. Confira o código digitado.";
+  }
+
+  if (message.includes("coupon_inactive")) {
+    return "Este cupom não está mais valendo.";
+  }
+
+  if (message.includes("coupon_not_started")) {
+    return "Este cupom ainda não começou a valer.";
+  }
+
+  if (message.includes("coupon_expired")) {
+    return "Este cupom está expirado.";
+  }
+
+  if (message.includes("coupon_exhausted")) {
+    return "Este cupom atingiu o limite de usos.";
+  }
+
+  return null;
+}
 
 export type UnavailableItem = {
   variantId: string;
@@ -60,6 +99,11 @@ export async function POST(request: Request) {
 
   const input = parsed.data;
   const supabase = createAdminClient();
+
+  // Normalizado aqui e de novo no banco: "duda10" e "DUDA10" batem sempre.
+  const couponCode = input.couponCode?.trim()
+    ? normalizeCouponCode(input.couponCode)
+    : null;
 
   // Soma quantidades repetidas da mesma variante antes de conferir estoque.
   const requested = new Map<string, number>();
@@ -98,8 +142,8 @@ export async function POST(request: Request) {
     subtotal_cents: number;
   }[] = [];
 
-  let subtotalCents = 0;
-
+  // O subtotal não é somado aqui: create_preorder() refaz a conta a
+  // partir dos itens, dentro da mesma transação que grava o pedido.
   for (const [variantId, quantity] of requested) {
     const variant = byId.get(variantId);
 
@@ -125,7 +169,6 @@ export async function POST(request: Request) {
     }
 
     const lineTotal = variant.price_cents * quantity;
-    subtotalCents += lineTotal;
 
     orderItems.push({
       variant_id: variant.id,
@@ -150,33 +193,42 @@ export async function POST(request: Request) {
 
   const isDelivery = input.fulfillmentType === "entrega";
 
-  const { data: order, error: orderError } = await supabase
-    .from("orders")
-    .insert({
-      customer_name: input.customerName,
-      fulfillment_type: input.fulfillmentType,
-      neighborhood: isDelivery ? (input.neighborhood?.trim() ?? null) : null,
-      payment_method: input.paymentMethod,
-      subtotal_cents: subtotalCents,
-      status: "novo",
-    })
-    .select("id, order_number")
-    .single();
+  /*
+    Pedido, itens e reserva do cupom numa transação só. Se o cupom for
+    recusado aqui, nenhum pedido meio-criado fica para trás — foi o que
+    obrigou a compensação manual que existia antes neste ponto.
+  */
+  const { data: created, error: orderError } = await supabase.rpc(
+    "create_preorder",
+    {
+      p_customer_name: input.customerName,
+      p_fulfillment_type: input.fulfillmentType,
+      p_neighborhood: isDelivery ? (input.neighborhood?.trim() ?? null) : null,
+      p_payment_method: input.paymentMethod,
+      p_items: orderItems.map((item) => ({
+        variantId: item.variant_id,
+        productId: item.product_id,
+        productName: item.product_name_snapshot,
+        variantLabel: item.variant_label_snapshot,
+        unitPriceCents: item.unit_price_cents_snapshot,
+        quantity: item.quantity,
+      })),
+      p_coupon_code: couponCode,
+    },
+  );
+
+  const order = Array.isArray(created) ? created[0] : null;
 
   if (orderError || !order) {
-    return NextResponse.json(
-      { error: "Não foi possível gerar o pedido. Tente de novo." },
-      { status: 500 },
-    );
-  }
+    const couponError = translateCouponError(orderError?.message ?? "");
 
-  const { error: itemsError } = await supabase
-    .from("order_items")
-    .insert(orderItems.map((item) => ({ ...item, order_id: order.id })));
+    if (couponError) {
+      return NextResponse.json(
+        { error: couponError, couponRejected: true },
+        { status: 409 },
+      );
+    }
 
-  if (itemsError) {
-    // Pedido sem itens não serve para nada e sujaria as métricas.
-    await supabase.from("orders").delete().eq("id", order.id);
     return NextResponse.json(
       { error: "Não foi possível gerar o pedido. Tente de novo." },
       { status: 500 },
@@ -201,7 +253,17 @@ export async function POST(request: Request) {
         }
       : null,
     paymentMethod: input.paymentMethod,
-    subtotalCents,
+    // Valores do pedido gravado, não os calculados aqui em cima.
+    subtotalCents: order.subtotal_cents,
+    coupon:
+      order.coupon_code && order.coupon_discount_percent
+        ? {
+            code: order.coupon_code,
+            discountPercent: order.coupon_discount_percent,
+            discountCents: order.discount_cents,
+          }
+        : null,
+    totalCents: order.total_cents,
     items: orderItems.map((item) => ({
       productName: item.product_name_snapshot,
       variantLabel: item.variant_label_snapshot,
@@ -212,7 +274,11 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     orderNumber: order.order_number,
-    subtotalCents,
+    subtotalCents: order.subtotal_cents,
+    discountCents: order.discount_cents,
+    totalCents: order.total_cents,
+    couponCode: order.coupon_code,
+    couponDiscountPercent: order.coupon_discount_percent,
     whatsappUrl: buildWhatsAppUrl(message),
   });
 }

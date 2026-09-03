@@ -43,6 +43,15 @@ export type VariantType =
   | "full"
   | "decant";
 
+/** jsonb do banco. Usado nos argumentos das funções RPC. */
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
+
 type Timestamps = {
   created_at: string;
   updated_at: string;
@@ -155,6 +164,28 @@ export type Order =
     paid_at:
       | string
       | null;
+
+    /* Cupom aplicado. Os três snapshots congelam o desconto no
+       momento da compra: desativar, editar ou excluir o cupom
+       depois não altera o pedido. coupon_id é só o vínculo que o
+       relatório usa, e vira null se o cupom for apagado. */
+
+    coupon_id:
+      | string
+      | null;
+
+    coupon_code_snapshot:
+      | string
+      | null;
+
+    coupon_discount_percent_snapshot:
+      | number
+      | null;
+
+    discount_cents: number;
+
+    /** Coluna gerada pelo banco: subtotal_cents - discount_cents. */
+    total_cents: number;
   };
 
 export type OrderItem = {
@@ -179,6 +210,120 @@ export type OrderItem = {
   quantity: number;
 
   subtotal_cents: number;
+};
+
+export type Influencer =
+  Timestamps & {
+    id: string;
+
+    name: string;
+
+    /** @perfil da rede social, opcional. */
+    handle:
+      | string
+      | null;
+
+    notes:
+      | string
+      | null;
+
+    /** false = arquivado. Nunca some do histórico. */
+    active: boolean;
+  };
+
+export type Coupon =
+  Timestamps & {
+    id: string;
+
+    /** Sempre normalizado: maiúsculas, sem espaço nas pontas. */
+    code: string;
+
+    discount_percent: number;
+
+    influencer_id:
+      | string
+      | null;
+
+    /** null = vale desde já. */
+    starts_at:
+      | string
+      | null;
+
+    /** null = sem prazo. */
+    expires_at:
+      | string
+      | null;
+
+    /** null = usos ilimitados. */
+    max_uses:
+      | number
+      | null;
+
+    /** Sobe quando o pré-pedido é criado. O limite vale contra ele. */
+    uses_reserved: number;
+
+    /** Sobe quando o admin marca o pedido como pago. */
+    uses_confirmed: number;
+
+    /** Só exibição pública. Não decide se o cupom é resgatável. */
+    show_in_showcase: boolean;
+
+    /** false = desativado (soft-delete). */
+    active: boolean;
+  };
+
+/**
+ * Linha da view coupon_performance.
+ *
+ * Receita conta pedido pago (paid_at), como no resto do painel. O que
+ * ainda está em atendimento aparece como pendente, separado.
+ */
+export type CouponPerformance = Pick<
+  Coupon,
+  | "id"
+  | "code"
+  | "discount_percent"
+  | "influencer_id"
+  | "active"
+  | "show_in_showcase"
+  | "starts_at"
+  | "expires_at"
+  | "max_uses"
+  | "uses_reserved"
+  | "uses_confirmed"
+  | "created_at"
+> & {
+  paid_orders: number;
+
+  pending_orders: number;
+
+  cancelled_orders: number;
+
+  /** Soma dos subtotais pagos: valor antes do desconto. */
+  paid_gross_cents: number;
+
+  /** Quanto de desconto a loja concedeu nos pedidos pagos. */
+  paid_discount_cents: number;
+
+  /** Soma dos totais pagos: o que a loja recebeu. */
+  paid_net_cents: number;
+
+  /** Pedidos feitos e ainda não pagos, pelo valor final. */
+  pending_net_cents: number;
+};
+
+export type InfluencerPerformance = Pick<
+  Influencer,
+  "id" | "name" | "handle" | "active"
+> & {
+  coupons_total: number;
+  coupons_active: number;
+  paid_orders: number;
+  pending_orders: number;
+  paid_gross_cents: number;
+  paid_discount_cents: number;
+  paid_net_cents: number;
+  pending_net_cents: number;
 };
 
 export type Profile = {
@@ -221,7 +366,16 @@ export type Database = {
       product_images:
         Table<ProductImage>;
 
-      orders: Table<Order>;
+      // total_cents é coluna gerada: o banco recusa escrita nela.
+      orders: Table<
+        Order,
+        Partial<Omit<Order, "total_cents">>,
+        Partial<Omit<Order, "total_cents">>
+      >;
+
+      influencers: Table<Influencer>;
+
+      coupons: Table<Coupon>;
 
       order_items: Table<
         OrderItem,
@@ -229,10 +383,17 @@ export type Database = {
       >;
     };
 
-    Views: Record<
-      string,
-      never
-    >;
+    Views: {
+      coupon_performance: {
+        Row: CouponPerformance;
+        Relationships: [];
+      };
+
+      influencer_performance: {
+        Row: InfluencerPerformance;
+        Relationships: [];
+      };
+    };
 
     Functions: {
       mark_order_paid: {
@@ -243,6 +404,27 @@ export type Database = {
         Returns: {
           order_number: string;
           already_paid: boolean;
+        }[];
+      };
+
+      create_preorder: {
+        Args: {
+          p_customer_name: string;
+          p_fulfillment_type: FulfillmentType;
+          p_neighborhood: string | null;
+          p_payment_method: PaymentMethod;
+          p_items: Json;
+          p_coupon_code: string | null;
+        };
+
+        Returns: {
+          order_id: string;
+          order_number: string;
+          subtotal_cents: number;
+          discount_cents: number;
+          total_cents: number;
+          coupon_code: string | null;
+          coupon_discount_percent: number | null;
         }[];
       };
 

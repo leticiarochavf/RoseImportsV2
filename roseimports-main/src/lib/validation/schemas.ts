@@ -48,6 +48,13 @@ export const createOrderSchema = z
       .array(orderItemInputSchema)
       .min(1, "Seu carrinho está vazio.")
       .max(30, "Muitos itens no pedido."),
+
+    /*
+     * Só o código digitado. Valor de desconto vindo do navegador é
+     * ignorado de propósito: quem calcula é o banco, a partir da
+     * porcentagem guardada no cupom.
+     */
+    couponCode: optionalText(24),
   })
   .superRefine((data, ctx) => {
     if (data.fulfillmentType !== "entrega") {

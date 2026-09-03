@@ -61,15 +61,19 @@ export default async function DashboardPage({
 
     // Vendas: paid_at é a fonte da verdade, não o status. Um pedido já
     // entregue continua contando exatamente uma vez. (§28)
+    // total_cents, não subtotal: com cupom, o que entrou no caixa é o
+    // valor já com desconto.
     supabase
       .from("orders")
-      .select("subtotal_cents")
+      .select("total_cents")
       .not("paid_at", "is", null)
       .gte("paid_at", since),
 
     supabase
       .from("orders")
-      .select("id, order_number, customer_name, subtotal_cents, status, created_at")
+      .select(
+        "id, order_number, customer_name, total_cents, discount_cents, status, created_at",
+      )
       .order("created_at", { ascending: false })
       .limit(8),
   ]);
@@ -77,7 +81,7 @@ export default async function DashboardPage({
   const preorderCount = preorders.count ?? 0;
   const paidOrders = paid.data ?? [];
   const paidCount = paidOrders.length;
-  const revenueCents = paidOrders.reduce((sum, o) => sum + o.subtotal_cents, 0);
+  const revenueCents = paidOrders.reduce((sum, o) => sum + o.total_cents, 0);
   const averageCents = paidCount > 0 ? Math.round(revenueCents / paidCount) : 0;
   const conversion =
     preorderCount > 0 ? (paidCount / preorderCount) * 100 : 0;
@@ -117,8 +121,9 @@ export default async function DashboardPage({
       </div>
 
       <p className="mt-3 text-xs text-muted">
-        O faturamento soma apenas o subtotal dos produtos: taxa de entrega e
-        juros de cartão são combinados no atendimento e não entram aqui.
+        O faturamento soma apenas o valor dos produtos, já com o desconto de
+        cupom aplicado: taxa de entrega e juros de cartão são combinados no
+        atendimento e não entram aqui.
       </p>
 
       <section className="mt-12">
@@ -160,7 +165,13 @@ export default async function DashboardPage({
                       {formatDateTime(order.created_at)}
                     </td>
                     <td className="px-4 py-3">
-                      {formatCents(order.subtotal_cents)}
+                      {formatCents(order.total_cents)}
+
+                      {order.discount_cents > 0 && (
+                        <span className="mt-0.5 block text-xs text-rose">
+                          cupom −{formatCents(order.discount_cents)}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <StatusPill status={order.status as OrderStatus} />
