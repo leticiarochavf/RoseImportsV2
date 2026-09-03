@@ -24,9 +24,10 @@ type RawVariant = {
   label: string;
   volume_ml: number | null;
   variant_type: "full" | "decant";
-  price_cents: number;
+  price_cents: number | null;
   stock_quantity: number;
   sort_order: number;
+  active: boolean;
 };
 
 type RawImage = {
@@ -57,7 +58,7 @@ const PRODUCT_SELECT = `
   olfactory_family_id, showcase_order,
   categories ( name, slug ),
   olfactory_families ( name, slug ),
-  product_variants ( id, label, volume_ml, variant_type, price_cents, stock_quantity, sort_order ),
+  product_variants ( id, label, volume_ml, variant_type, price_cents, stock_quantity, sort_order, active ),
   product_images ( storage_path, alt_text, sort_order )
 `;
 
@@ -115,8 +116,15 @@ export type ProductDetail = {
    Conversão
    --------------------------------------------------------------- */
 
-function sortedActiveVariants(raw: RawProduct): RawVariant[] {
-  return [...raw.product_variants].sort(
+function sortedActiveVariants(
+  raw: RawProduct,
+): Array<RawVariant & { price_cents: number }> {
+  return raw.product_variants
+    .filter(
+      (variant): variant is RawVariant & { price_cents: number } =>
+        variant.active && variant.price_cents !== null,
+    )
+    .sort(
     (a, b) => a.sort_order - b.sort_order || a.price_cents - b.price_cents,
   );
 }

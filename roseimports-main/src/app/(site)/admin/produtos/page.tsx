@@ -134,21 +134,20 @@ export default async function ProdutosPage({
           </p>
         </div>
 
-        <Link
-          href="/admin/produtos/novo"
-          className="
-            inline-flex w-fit items-center
-            justify-center bg-ink
-            px-5 py-3
-            text-xs font-medium
-            tracking-[0.1em]
-            text-ivory uppercase
-            transition-opacity
-            hover:opacity-90
-          "
-        >
-          + Novo produto
-        </Link>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Link
+            href="/admin/produtos/cadastro-em-lote"
+            className="inline-flex w-fit items-center justify-center border border-line px-5 py-3 text-xs font-medium tracking-[0.1em] text-ink uppercase transition-colors hover:bg-white"
+          >
+            Cadastro em lote
+          </Link>
+          <Link
+            href="/admin/produtos/novo"
+            className="inline-flex w-fit items-center justify-center bg-ink px-5 py-3 text-xs font-medium tracking-[0.1em] text-ivory uppercase transition-opacity hover:opacity-90"
+          >
+            + Novo produto
+          </Link>
+        </div>
       </header>
 
       {/* RESUMO */}

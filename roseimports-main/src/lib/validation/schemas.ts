@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeProductName } from "@/lib/product-name";
 
 /* ---------------------------------------------------------------
    Pré-pedido
@@ -136,7 +137,8 @@ export const productSchema = z.object({
     .string()
     .trim()
     .min(2, "Informe o nome do produto.")
-    .max(120),
+    .max(120)
+    .transform(normalizeProductName),
 
   slug: z
     .string()

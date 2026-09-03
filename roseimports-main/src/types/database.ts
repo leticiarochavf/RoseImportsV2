@@ -43,6 +43,11 @@ export type VariantType =
   | "full"
   | "decant";
 
+export type ProductConcentration =
+  | "EDP"
+  | "EDT"
+  | "Parfum";
+
 /** jsonb do banco. Usado nos argumentos das funções RPC. */
 export type Json =
   | string
@@ -114,14 +119,42 @@ export type ProductVariant =
 
     variant_type: VariantType;
 
-    price_cents: number;
+    price_cents:
+      | number
+      | null;
 
     stock_quantity: number;
 
     active: boolean;
 
     sort_order: number;
+
+    concentration:
+      | ProductConcentration
+      | null;
+
+    is_kit: boolean;
   };
+
+export type ProductVariantKitItem = {
+  id: string;
+  kit_variant_id: string;
+  component_type: string;
+  component_name: string | null;
+  volume_ml: number | null;
+  component_quantity: number | null;
+  sort_order: number;
+  created_at: string;
+};
+
+export type BulkProductImport = {
+  id: string;
+  idempotency_key: string;
+  payload_hash: string;
+  confirmed_by: string;
+  result: Json;
+  confirmed_at: string;
+};
 
 export type ProductImage = {
   id: string;
@@ -363,6 +396,12 @@ export type Database = {
       product_variants:
         Table<ProductVariant>;
 
+      product_variant_kit_items:
+        Table<ProductVariantKitItem>;
+
+      bulk_product_imports:
+        Table<BulkProductImport>;
+
       product_images:
         Table<ProductImage>;
 
@@ -426,6 +465,16 @@ export type Database = {
           coupon_code: string | null;
           coupon_discount_percent: number | null;
         }[];
+      };
+
+      confirm_bulk_product_import: {
+        Args: {
+          p_idempotency_key: string;
+          p_payload_hash: string;
+          p_items: Json;
+        };
+
+        Returns: Json;
       };
 
       is_admin: {

@@ -241,9 +241,9 @@ export function VariantManager({
                 </div>
 
                 <p className="mt-1 text-xs text-muted">
-                  {formatCents(
-                    variant.price_cents,
-                  )}{" "}
+                  {variant.price_cents === null
+                    ? "Preço pendente"
+                    : formatCents(variant.price_cents)}{" "}
                   ·{" "}
                   {variant.stock_quantity} un.
                   {" · "}
@@ -478,9 +478,9 @@ function VariantForm({
               placeholder="249,90"
               defaultValue={
                 variant
-                  ? centsToInput(
-                      variant.price_cents,
-                    )
+                  ? variant.price_cents === null
+                    ? ""
+                    : centsToInput(variant.price_cents)
                   : ""
               }
               className={`${inputClass} pl-10`}

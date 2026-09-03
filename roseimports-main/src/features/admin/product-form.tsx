@@ -6,6 +6,8 @@ import {
   updateProduct,
 } from "@/features/admin/actions";
 import { slugify } from "@/lib/slug";
+import { normalizeProductName } from "@/lib/product-name";
+import { categorySlugForProductType } from "@/lib/product-category";
 import type {
   Category,
   OlfactoryFamily,
@@ -24,8 +26,10 @@ export function ProductForm({
   categories: Category[];
   families: OlfactoryFamily[];
 }) {
+  const initialProductType =
+    product?.product_type ?? "perfume";
   const [name, setName] = useState(
-    product?.name ?? "",
+    product ? normalizeProductName(product.name) : "",
   );
 
   const [slug, setSlug] = useState(
@@ -37,7 +41,15 @@ export function ProductForm({
 
   const [productType, setProductType] =
     useState<ProductType>(
-      product?.product_type ?? "perfume",
+      initialProductType,
+    );
+
+  const [categoryId, setCategoryId] =
+    useState(
+      categoryIdForProductType(
+        initialProductType,
+        categories,
+      ) ?? product?.category_id ?? "",
     );
 
   const [pending, startTransition] =
@@ -54,10 +66,24 @@ export function ProductForm({
    * até que seja alterado manualmente.
    */
   function handleName(value: string) {
-    setName(value);
+    const normalizedName =
+      value.toLocaleUpperCase("pt-BR");
+
+    setName(normalizedName);
 
     if (!slugTouched) {
-      setSlug(slugify(value));
+      setSlug(slugify(normalizedName));
+    }
+  }
+
+  function handleNameBlur() {
+    const normalizedName =
+      normalizeProductName(name);
+
+    setName(normalizedName);
+
+    if (!slugTouched) {
+      setSlug(slugify(normalizedName));
     }
   }
 
@@ -136,7 +162,8 @@ export function ProductForm({
                   event.target.value,
                 )
               }
-              placeholder="Ex.: Lattafa Yara"
+              onBlur={handleNameBlur}
+              placeholder="Ex.: LATTAFA YARA"
               className={inputClass}
             />
           </Field>
@@ -170,9 +197,11 @@ export function ProductForm({
               id="categoryId"
               name="categoryId"
               required
-              defaultValue={
-                product?.category_id ??
-                ""
+              value={categoryId}
+              onChange={(event) =>
+                setCategoryId(
+                  event.target.value,
+                )
               }
               className={inputClass}
             >
@@ -180,7 +209,15 @@ export function ProductForm({
                 Escolha uma categoria
               </option>
 
-              {categories.map(
+              {categories
+                .filter(
+                  (category) =>
+                    category.slug ===
+                    categorySlugForProductType(
+                      productType,
+                    ),
+                )
+                .map(
                 (category) => (
                   <option
                     key={
@@ -210,12 +247,21 @@ export function ProductForm({
               name="productType"
               required
               value={productType}
-              onChange={(event) =>
-                setProductType(
+              onChange={(event) => {
+                const nextProductType =
                   event.target
-                    .value as ProductType,
-                )
-              }
+                    .value as ProductType;
+
+                setProductType(
+                  nextProductType,
+                );
+                setCategoryId(
+                  categoryIdForProductType(
+                    nextProductType,
+                    categories,
+                  ) ?? "",
+                );
+              }}
               className={inputClass}
             >
               <option value="perfume">
@@ -495,6 +541,21 @@ export function ProductForm({
 
 const inputClass =
   "mt-2 w-full rounded-sm border border-line bg-ivory px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-muted/70 focus:border-rose focus:ring-1 focus:ring-rose/10";
+
+function categoryIdForProductType(
+  productType: ProductType,
+  categories: Category[],
+): string | null {
+  const expectedSlug =
+    categorySlugForProductType(productType);
+
+  return (
+    categories.find(
+      (category) =>
+        category.slug === expectedSlug,
+    )?.id ?? null
+  );
+}
 
 /* ---------------------------------------------------------------
    CAMPO

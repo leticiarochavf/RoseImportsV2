@@ -17,7 +17,7 @@ type ProductImage = {
 type Row = {
   id: string;
   label: string;
-  price_cents: number;
+  price_cents: number | null;
   stock_quantity: number;
   active: boolean;
   sort_order: number;
