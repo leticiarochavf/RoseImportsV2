@@ -51,3 +51,32 @@ export async function getCatalogCounts(): Promise<CatalogCounts> {
     variantesAtivas: variantes.count ?? 0,
   };
 }
+
+/**
+ * Produtos ativos, com versões ativas, cuja soma de estoque zerou.
+ *
+ * Fica junto das demais contagens porque é lido pelo mesmo resumo: vale o
+ * catálogo inteiro, não o filtro corrente da tabela.
+ */
+export async function getAtivosSemEstoqueCount(): Promise<number> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, product_variants ( stock_quantity, active )")
+    .eq("active", true);
+
+  if (error) throw new Error(error.message);
+
+  const rows = (data ?? []) as unknown as {
+    id: string;
+    product_variants: { stock_quantity: number; active: boolean }[];
+  }[];
+
+  return rows.filter((row) => {
+    const ativas = row.product_variants.filter((variant) => variant.active);
+    if (ativas.length === 0) return false;
+
+    return ativas.reduce((sum, variant) => sum + variant.stock_quantity, 0) <= 0;
+  }).length;
+}

@@ -1,9 +1,21 @@
+import { Suspense } from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdminUser } from "@/lib/auth/admin";
-import { getCatalogCounts } from "@/features/admin/metrics";
+import {
+  getAtivosSemEstoqueCount,
+  getCatalogCounts,
+} from "@/features/admin/metrics";
 import { ProductRowActions } from "@/features/admin/product-row-actions";
+import { AdminProductFilters } from "@/features/admin/product-filters";
+import {
+  ADMIN_PAGE_SIZES,
+  ADMIN_PAGE_SIZE_ALL,
+  ADMIN_PAGE_SIZE_DEFAULT,
+} from "@/features/admin/product-filters.constants";
+import { getCategories } from "@/features/catalog/queries";
 import { ProductImage } from "@/components/product-image";
 import { searchOrFilters } from "@/lib/search";
 
@@ -15,6 +27,65 @@ type ProductImageRow = {
   alt_text: string | null;
   sort_order: number;
 };
+
+const PRODUCT_SELECT = `
+  id,
+  name,
+  brand,
+  active,
+  featured,
+  promotional,
+  gender,
+  categories (
+    name
+  ),
+  product_variants (
+    id,
+    stock_quantity,
+    active
+  ),
+  product_images (
+    storage_path,
+    alt_text,
+    sort_order
+  )
+`;
+
+type SearchParams = Record<string, string | string[] | undefined>;
+
+function first(value: string | string[] | undefined): string {
+  return (Array.isArray(value) ? value[0] : value) ?? "";
+}
+
+function pageNumber(value: string | string[] | undefined): number {
+  const parsed = Number.parseInt(first(value) || "1", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
+/** `null` = "Todos", opção que só existe no painel. */
+function parsePageSize(value: string): number | null {
+  if (value === ADMIN_PAGE_SIZE_ALL) return null;
+
+  const parsed = Number.parseInt(value, 10);
+  return (ADMIN_PAGE_SIZES as readonly number[]).includes(parsed)
+    ? parsed
+    : ADMIN_PAGE_SIZE_DEFAULT;
+}
+
+function pageHref(params: SearchParams, page: number): string {
+  const next = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    const selected = first(value);
+    if (selected) next.set(key, selected);
+  }
+
+  next.delete("pagina");
+  if (page > 1) next.set("pagina", String(page));
+
+  const query = next.toString();
+  return query ? `/admin/produtos?${query}` : "/admin/produtos";
+}
 
 type Row = {
   id: string;
@@ -37,82 +108,177 @@ type Row = {
   product_images: ProductImageRow[];
 };
 
+/** Produto ativo, com versões ativas, cujo estoque somado zerou. */
+function isSemEstoque(product: Row): boolean {
+  const activeVariants = product.product_variants.filter(
+    (variant) => variant.active,
+  );
+
+  if (!product.active || activeVariants.length === 0) return false;
+
+  return (
+    activeVariants.reduce(
+      (sum, variant) => sum + variant.stock_quantity,
+      0,
+    ) <= 0
+  );
+}
+
 export default async function ProdutosPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    q?: string;
-  }>;
+  searchParams: Promise<SearchParams>;
 }) {
   await requireAdminUser();
 
-  const { q = "" } = await searchParams;
+  const params = await searchParams;
+
+  const q = first(params.q);
+  const categoria = first(params.categoria);
+  const marca = first(params.marca);
+  const genero = first(params.genero);
+  const situacao = first(params.situacao);
+  const destaque = first(params.destaque);
+  const estoque = first(params.estoque);
+
+  const pageSize = parsePageSize(
+    first(params.por_pagina) || String(ADMIN_PAGE_SIZE_DEFAULT),
+  );
+  const currentPage = pageNumber(params.pagina);
 
   const supabase = await createClient();
 
-  let query = supabase
+  // Categorias servem ao seletor e à tradução slug → id do filtro.
+  const categories = await getCategories();
+  const categoryId =
+    categories.find((category) => category.slug === categoria)?.id ?? null;
+  const categoriaInvalida = Boolean(categoria) && categoryId === null;
+
+  // Marca é texto livre: a lista do seletor sai do próprio catálogo.
+  const { data: brandRows, error: brandsError } = await supabase
     .from("products")
-    .select(`
-      id,
-      name,
-      brand,
-      active,
-      featured,
-      promotional,
-      categories (
-        name
-      ),
-      product_variants (
-        id,
-        stock_quantity,
-        active
-      ),
-      product_images (
-        storage_path,
-        alt_text,
-        sort_order
-      )
-    `)
-    .order("name");
+    .select("brand")
+    .not("brand", "is", null)
+    .order("brand");
 
-  // Termo escapado e quebrado em palavras: vírgula, parêntese e ponto são
-  // sintaxe do PostgREST e quebrariam a consulta se fossem interpolados.
-  for (const filter of searchOrFilters(q)) {
-    query = query.or(filter);
+  if (brandsError) {
+    throw new Error(brandsError.message);
   }
 
-  const { data, error } = await query;
+  const brands = [
+    ...new Set(
+      (brandRows ?? [])
+        .map((row) => (row.brand ?? "").trim())
+        .filter(Boolean),
+    ),
+  ];
 
-  if (error) {
-    throw new Error(error.message);
+  const applyFilters = <
+    T extends {
+      or: (filters: string) => T;
+      eq: (column: string, value: string | boolean) => T;
+    },
+  >(
+    builder: T,
+  ): T => {
+    let next = builder;
+
+    // Termo escapado e quebrado em palavras: vírgula, parêntese e ponto são
+    // sintaxe do PostgREST e quebrariam a consulta se fossem interpolados.
+    for (const filter of searchOrFilters(q)) {
+      next = next.or(filter);
+    }
+
+    if (categoryId) next = next.eq("category_id", categoryId);
+    if (marca) next = next.eq("brand", marca);
+    if (
+      genero === "feminino" ||
+      genero === "masculino" ||
+      genero === "unissex"
+    ) {
+      next = next.eq("gender", genero);
+    }
+    if (situacao === "ativo") next = next.eq("active", true);
+    if (situacao === "inativo") next = next.eq("active", false);
+    if (destaque === "sim") next = next.eq("featured", true);
+    if (destaque === "nao") next = next.eq("featured", false);
+
+    return next;
+  };
+
+  /*
+     "Sem estoque" é agregado de product_variants, que o PostgREST não
+     filtra nem conta. Só nesse caso a página traz o conjunto filtrado
+     inteiro e recorta aqui; os demais filtros paginam no banco.
+  */
+  const filtraEstoque = estoque === "sem";
+
+  /*
+     A contagem vem antes dos dados porque `.range()` fora do total faz o
+     PostgREST responder 416: a página precisa ser corrigida antes de virar
+     intervalo, não depois da consulta falhar.
+  */
+  let total = 0;
+
+  if (!categoriaInvalida && !filtraEstoque) {
+    const { count, error } = await applyFilters(
+      supabase.from("products").select("id", { count: "exact", head: true }),
+    );
+
+    if (error) throw new Error(error.message);
+    total = count ?? 0;
   }
 
-  const products = (data ?? []) as unknown as Row[];
+  let rows: Row[] = [];
+
+  if (filtraEstoque && !categoriaInvalida) {
+    const { data, error } = await applyFilters(
+      supabase.from("products").select(PRODUCT_SELECT).order("name"),
+    );
+
+    if (error) throw new Error(error.message);
+
+    rows = ((data ?? []) as unknown as Row[]).filter(isSemEstoque);
+    total = rows.length;
+  }
+
+  const totalPages = pageSize ? Math.max(1, Math.ceil(total / pageSize)) : 1;
+
+  // Trocar filtro ou quantidade não pode deixar o painel numa página vazia.
+  if (currentPage > totalPages) {
+    redirect(pageHref(params, totalPages));
+  }
+
+  const from = pageSize ? (currentPage - 1) * pageSize : 0;
+
+  if (!filtraEstoque && !categoriaInvalida && total > 0) {
+    let query = applyFilters(
+      supabase.from("products").select(PRODUCT_SELECT).order("name"),
+    );
+
+    if (pageSize) {
+      query = query.range(from, from + pageSize - 1);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw new Error(error.message);
+    rows = (data ?? []) as unknown as Row[];
+  }
+
+  const products =
+    filtraEstoque && pageSize ? rows.slice(from, from + pageSize) : rows;
 
   // Mesma fonte da tela de Estoque: os dois painéis não podem discordar.
-  // Vale o catálogo inteiro, não a busca corrente — é um resumo da loja.
-  const counts = await getCatalogCounts();
+  // Vale o catálogo inteiro, não os filtros correntes — é um resumo da loja.
+  const [counts, semEstoque] = await Promise.all([
+    getCatalogCounts(),
+    getAtivosSemEstoqueCount(),
+  ]);
 
-  const semEstoque = products.filter(
-    (product) => {
-      const activeVariants =
-        product.product_variants.filter(
-          (variant) => variant.active,
-        );
-
-      const stock = activeVariants.reduce(
-        (sum, variant) =>
-          sum + variant.stock_quantity,
-        0,
-      );
-
-      return (
-        product.active &&
-        activeVariants.length > 0 &&
-        stock <= 0
-      );
-    },
-  ).length;
+  const hasFilters = Boolean(
+    q || categoria || marca || genero || situacao || destaque || estoque,
+  );
 
   return (
     <div className="space-y-6">
@@ -182,82 +348,37 @@ export default async function ProdutosPage({
         />
       </section>
 
-      {/* BUSCA */}
+      {/* BUSCA E FILTROS */}
 
-      <form
-        action="/admin/produtos"
-        method="get"
-        role="search"
-        className="flex w-full max-w-xl gap-2"
-      >
-        <label
-          htmlFor="q"
-          className="sr-only"
-        >
-          Buscar produto
-        </label>
-
-        <input
-          id="q"
-          name="q"
-          type="search"
-          defaultValue={q}
-          placeholder="Buscar por nome ou marca..."
-          className="
-            h-11 flex-1
-            border border-line
-            bg-surface
-            px-3
-            text-sm
-            outline-none
-            transition
-            placeholder:text-muted
-            focus:border-line-strong
-          "
+      <Suspense fallback={<div className="h-28" />}>
+        <AdminProductFilters
+          categories={categories.map((category) => ({
+            value: category.slug,
+            label: category.name,
+          }))}
+          brands={brands}
         />
-
-        <button
-          type="submit"
-          className="
-            h-11 bg-ink px-5
-            text-xs font-medium
-            tracking-[0.08em]
-            text-ivory uppercase
-            transition-opacity
-            hover:opacity-90
-          "
-        >
-          Buscar
-        </button>
-
-        {q && (
-          <Link
-            href="/admin/produtos"
-            className="
-              flex h-11 items-center
-              px-2
-              text-xs text-muted
-              hover:text-ink
-            "
-          >
-            Limpar
-          </Link>
-        )}
-      </form>
+      </Suspense>
 
       {/* RESULTADO */}
 
-      {q && (
+      {hasFilters && (
         <p className="text-xs text-muted">
-          {products.length === 1
+          {total === 1
             ? "1 produto encontrado"
-            : `${products.length} produtos encontrados`}{" "}
-          para{" "}
-          <span className="font-medium text-ink">
-            “{q}”
-          </span>
+            : `${total} produtos encontrados`}
+          {q && (
+            <>
+              {" "}
+              para{" "}
+              <span className="font-medium text-ink">
+                “{q}”
+              </span>
+            </>
+          )}
         </p>
       )}
+
 
       {/* TABELA */}
 
@@ -461,18 +582,25 @@ export default async function ProdutosPage({
       ) : (
         <div className="border border-line bg-surface px-5 py-14 text-center">
           <p className="text-sm font-medium text-ink">
-            {q
+            {hasFilters
               ? "Nenhum produto encontrado"
               : "Nenhum produto cadastrado"}
           </p>
 
           <p className="mt-1 text-xs text-muted">
-            {q
-              ? "Tente pesquisar por outro nome ou marca."
+            {hasFilters
+              ? "Ajuste a busca ou os filtros para ver mais produtos."
               : "Comece cadastrando o primeiro produto da loja."}
           </p>
 
-          {!q && (
+          {hasFilters ? (
+            <Link
+              href="/admin/produtos"
+              className="mt-4 inline-block text-xs font-medium text-rose hover:underline"
+            >
+              Limpar filtros
+            </Link>
+          ) : (
             <Link
               href="/admin/produtos/novo"
               className="mt-4 inline-block text-xs font-medium text-rose hover:underline"
@@ -482,7 +610,127 @@ export default async function ProdutosPage({
           )}
         </div>
       )}
+
+      {/* PAGINAÇÃO */}
+
+      <AdminPagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        params={params}
+      />
     </div>
+  );
+}
+
+/** Mesma regra de páginas visíveis da paginação do catálogo. */
+function visiblePages(currentPage: number, totalPages: number) {
+  const pages = Array.from(
+    { length: totalPages },
+    (_, index) => index + 1,
+  ).filter(
+    (page) =>
+      page === 1 ||
+      page === totalPages ||
+      Math.abs(page - currentPage) <= 1,
+  );
+
+  return pages.reduce<(number | "ellipsis")[]>((items, page, index) => {
+    const previous = pages[index - 1];
+    if (previous && page - previous > 1) items.push("ellipsis");
+    items.push(page);
+    return items;
+  }, []);
+}
+
+function AdminPagination({
+  currentPage,
+  totalPages,
+  params,
+}: {
+  currentPage: number;
+  totalPages: number;
+  params: SearchParams;
+}) {
+  if (totalPages <= 1) return null;
+
+  /*
+     Cor não entra na base: bg-surface/text-ink (ociosa) e bg-ink/text-ivory
+     (página atual) disputariam a mesma propriedade no mesmo elemento, e o
+     Tailwind resolve pela ordem no CSS gerado, não pela ordem na classe —
+     a base venceria e a página atual ficaria com texto branco sobre fundo
+     claro, invisível. Mesmo ajuste já feito na paginação do catálogo.
+  */
+  const baseClass =
+    "inline-flex h-9 min-w-9 items-center justify-center border px-3 text-xs transition-colors";
+  const idleClass = "border-line bg-surface text-ink hover:border-line-strong";
+  const activeClass = "border-ink bg-ink text-ivory hover:border-ink";
+  const controlClass = `${baseClass} ${idleClass}`;
+
+  return (
+    <nav
+      aria-label="Paginação de produtos"
+      className="flex flex-wrap items-center justify-center gap-2"
+    >
+      {currentPage > 1 ? (
+        <Link
+          href={pageHref(params, currentPage - 1)}
+          className={controlClass}
+          rel="prev"
+          aria-label="Página anterior"
+        >
+          <span aria-hidden>←</span>
+        </Link>
+      ) : (
+        <span
+          aria-disabled="true"
+          className={`${controlClass} cursor-not-allowed opacity-40`}
+        >
+          <span aria-hidden>←</span>
+        </span>
+      )}
+
+      {visiblePages(currentPage, totalPages).map((item, index) =>
+        item === "ellipsis" ? (
+          <span
+            key={`ellipsis-${index}`}
+            className="inline-flex h-9 min-w-6 items-center justify-center text-xs text-muted"
+            aria-hidden
+          >
+            …
+          </span>
+        ) : (
+          <Link
+            key={item}
+            href={pageHref(params, item)}
+            aria-current={item === currentPage ? "page" : undefined}
+            aria-label={`Ir para a página ${item}`}
+            className={`${baseClass} ${
+              item === currentPage ? activeClass : idleClass
+            }`}
+          >
+            {item}
+          </Link>
+        ),
+      )}
+
+      {currentPage < totalPages ? (
+        <Link
+          href={pageHref(params, currentPage + 1)}
+          className={controlClass}
+          rel="next"
+          aria-label="Próxima página"
+        >
+          <span aria-hidden>→</span>
+        </Link>
+      ) : (
+        <span
+          aria-disabled="true"
+          className={`${controlClass} cursor-not-allowed opacity-40`}
+        >
+          <span aria-hidden>→</span>
+        </span>
+      )}
+    </nav>
   );
 }
 
