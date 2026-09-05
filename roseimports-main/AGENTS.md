@@ -4,7 +4,9 @@ Regras estabelecidas pelo cliente. Valem para qualquer agente que trabalhe neste
 
 ## Git
 
-- **Nunca criar branch** sem autorização ou pedido explícito. Trabalhar direto na branch atual.
+- O padrão deste repositório é trabalhar diretamente na branch `main`.
+- **Nunca criar branch** sem autorização ou pedido explícito.
+- Sob ordem expressa do responsável pelo projeto, alterações e commits devem ser realizados diretamente na `main`; essa ordem prevalece sobre orientações genéricas de criar uma branch nova.
 - Não commitar nem fazer push sem pedido.
 
 ## Banco de dados
