@@ -40,7 +40,7 @@ export type CreateProductWithSaleDataImportItem =
     ProductPresentationFields &
     VariantImportFields & {
       action: "create_product_with_sale_data";
-      priceCents: number;
+      priceCents: 30_000;
       availableForSale: true;
     };
 

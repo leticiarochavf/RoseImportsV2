@@ -7,6 +7,7 @@ import {
   duplicateEditableItem,
   getItemConfirmationBlockers,
   isItemConfirmable,
+  mergeReanalyzedItems,
   type EditableBulkProduct,
 } from "./ui-model";
 
@@ -51,7 +52,7 @@ const categoryIds = {
 };
 
 describe("modelo da revisão do cadastro em lote", () => {
-  it("prepara produtos novos para venda e mantém duplicidades em revisão", () => {
+  it("prepara produtos novos por R$ 300 e descarta duplicidades exatas", () => {
     const items = createEditableItems([
       analysis(),
       analysis({
@@ -69,14 +70,15 @@ describe("modelo da revisão do cadastro em lote", () => {
       }),
     ]);
 
-    expect(items.map((item) => item.selected)).toEqual([true, true, false, false]);
+    expect(items.map((item) => item.selected)).toEqual([true, false, false, false]);
     expect(items.map((item) => item.decision.type)).toEqual([
       "create_product_with_sale_data",
-      "increment_variant",
+      "skip",
       "review",
       "review",
     ]);
     expect(items[0]?.availableForSale).toBe(true);
+    expect(items[0]?.priceCents).toBe(30_000);
   });
 
   it("não libera dado incompleto sem edição e decisão manual", () => {
@@ -97,7 +99,7 @@ describe("modelo da revisão do cadastro em lote", () => {
       reviewed: true,
       selected: true,
       decision: { type: "create_product_with_sale_data" },
-      priceCents: 24990,
+      priceCents: 30_000,
       availableForSale: true,
     };
     expect(isItemConfirmable(reviewed, categoryIds)).toBe(true);
@@ -112,14 +114,9 @@ describe("modelo da revisão do cadastro em lote", () => {
         matchedVariantId: "20000000-0000-4000-8000-000000000001",
       }),
     ]);
-    const payload = buildConfirmItems(
-      items.map((item, index) =>
-        index === 0 ? { ...item, priceCents: 24990 } : item,
-      ),
-      categoryIds,
-    );
+    const payload = buildConfirmItems(items, categoryIds);
 
-    expect(payload).toHaveLength(2);
+    expect(payload).toHaveLength(1);
     expect(payload[0]).toMatchObject({
       action: "create_product_with_sale_data",
       name: "LATTAFA JASOOR",
@@ -129,18 +126,8 @@ describe("modelo da revisão do cadastro em lote", () => {
       gender: "masculino",
       variantLabel: "100 ml",
       quantity: 2,
-      priceCents: 24990,
+      priceCents: 30_000,
       availableForSale: true,
-    });
-    expect(payload[1]).toEqual({
-      action: "increment_existing_variant",
-      quantity: 2,
-      variantId: "20000000-0000-4000-8000-000000000001",
-      name: "LATTAFA JASOOR",
-      brand: "Lattafa",
-      categoryId: categoryIds.perfumes,
-      productType: "perfume",
-      gender: "masculino",
     });
   });
 
@@ -204,12 +191,39 @@ describe("modelo da revisão do cadastro em lote", () => {
           ...item!,
           selected: true,
           decision: { type: "create_product_with_sale_data" },
-          priceCents: 24990,
+          priceCents: 30_000,
           availableForSale: true,
         },
         categoryIds,
       ),
     ).toEqual(["brand_missing", "gender_missing", "manual_review_required"]);
+    expect(item?.quickFixFields).toEqual(["brand", "gender"]);
+  });
+
+  it("leva todos os campos obrigatórios ausentes para a correção rápida", () => {
+    const [item] = createEditableItems([
+      analysis({
+        name: "",
+        brand: null,
+        productType: null,
+        categorySlug: null,
+        gender: null,
+        volumeMl: null,
+        quantity: 0,
+        status: "incomplete",
+        proposedAction: null,
+      }),
+    ]);
+
+    expect(item?.quickFixFields).toEqual([
+      "name",
+      "brand",
+      "product_type",
+      "category",
+      "gender",
+      "volume",
+      "quantity",
+    ]);
   });
 
   it("exige disponibilidade para venda mesmo quando há preço", () => {
@@ -217,7 +231,7 @@ describe("modelo da revisão do cadastro em lote", () => {
     const base: EditableBulkProduct = {
       ...item!,
       decision: { type: "create_product_with_sale_data" },
-      priceCents: 24990,
+      priceCents: 30_000,
       availableForSale: false,
     };
 
@@ -245,7 +259,7 @@ describe("modelo da revisão do cadastro em lote", () => {
     const edited = {
       ...item!,
       name: "Café Árabe Nº 10",
-      priceCents: 24990,
+      priceCents: 30_000,
     };
 
     expect(buildConfirmItems([edited], categoryIds)[0]).toMatchObject({
@@ -265,7 +279,16 @@ describe("modelo da revisão do cadastro em lote", () => {
       }),
     ]);
 
-    expect(buildConfirmItems([item!], categoryIds)[0]).toMatchObject({
+    const selected = {
+      ...item!,
+      selected: true,
+      decision: {
+        type: "increment_variant" as const,
+        variantId: "20000000-0000-4000-8000-000000000001",
+      },
+    };
+
+    expect(buildConfirmItems([selected], categoryIds)[0]).toMatchObject({
       name: "LATTAFA JASOOR",
     });
   });
@@ -275,7 +298,7 @@ describe("modelo da revisão do cadastro em lote", () => {
     const ready: EditableBulkProduct = {
       ...item!,
       decision: { type: "create_product_with_sale_data" },
-      priceCents: 24990,
+      priceCents: 30_000,
       availableForSale: true,
       description: "Fragrância informada pela administradora.",
       featured: true,
@@ -283,7 +306,7 @@ describe("modelo da revisão do cadastro em lote", () => {
 
     expect(buildConfirmItems([ready], categoryIds)[0]).toMatchObject({
       action: "create_product_with_sale_data",
-      priceCents: 24990,
+      priceCents: 30_000,
       availableForSale: true,
       description: "Fragrância informada pela administradora.",
       featured: true,
@@ -301,6 +324,81 @@ describe("modelo da revisão do cadastro em lote", () => {
     };
 
     expect(isItemConfirmable(incomplete, categoryIds)).toBe(false);
+  });
+
+  it("ignora por completo uma linha descartada mesmo em estado antigo inconsistente", () => {
+    const [item] = createEditableItems([
+      analysis({
+        name: "",
+        brand: null,
+        gender: null,
+        status: "incomplete",
+        proposedAction: null,
+      }),
+    ]);
+
+    expect(
+      buildConfirmItems(
+        [
+          {
+            ...item!,
+            selected: true,
+            decision: { type: "skip" },
+          },
+        ],
+        categoryIds,
+      ),
+    ).toEqual([]);
+  });
+
+  it("descarta automaticamente uma repetição dentro do mesmo lote", () => {
+    const [item] = createEditableItems([
+      analysis({
+        status: "possible_duplicate",
+        proposedAction: null,
+        reasons: ["duplicate_in_batch"],
+      }),
+    ]);
+
+    expect(item).toMatchObject({
+      selected: false,
+      reviewed: true,
+      decision: { type: "skip" },
+    });
+  });
+
+  it("preserva as edições manuais ao reanalisar e aplica uma duplicidade recém-detectada", () => {
+    const [initial] = createEditableItems([
+      analysis({ status: "incomplete", proposedAction: null, gender: null }),
+    ]);
+    const edited: EditableBulkProduct = {
+      ...initial!,
+      gender: "masculino",
+      description: "Texto revisado pela administradora.",
+      reviewed: true,
+      selected: true,
+      decision: { type: "create_product_with_sale_data" },
+      priceCents: 30_000,
+      availableForSale: true,
+    };
+
+    const [reanalyzed] = mergeReanalyzedItems([edited], [
+      analysis({
+        status: "existing_product",
+        proposedAction: "increment_existing_variant",
+        matchedProductId: "10000000-0000-4000-8000-000000000001",
+        matchedVariantId: "20000000-0000-4000-8000-000000000001",
+      }),
+    ]);
+
+    expect(reanalyzed).toMatchObject({
+      gender: "masculino",
+      description: "Texto revisado pela administradora.",
+      selected: false,
+      reviewed: true,
+      decision: { type: "skip" },
+      status: "existing_product",
+    });
   });
 
   it("duplica agrupamento para permitir distribuição manual sem confirmá-lo", () => {

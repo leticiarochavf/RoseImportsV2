@@ -70,6 +70,17 @@ export type BulkProductAnalysis = ParsedBulkProduct & {
   reasons: BulkProductAnalysisReason[];
 };
 
+export type BulkProductDuplicateCheckItem = {
+  name: string;
+  brand: string;
+  productType: NonNullable<ParsedBulkProduct["productType"]>;
+  concentration: ParsedBulkProduct["concentration"];
+  volumeMl: number | null;
+  variantType: ParsedBulkProduct["variantType"];
+  isKit: boolean;
+  components: KitComponent[];
+};
+
 export function analyzeBulkProductRecords(
   records: ParsedBulkProduct[],
   catalog: CatalogProductCandidate[],
@@ -77,10 +88,69 @@ export function analyzeBulkProductRecords(
   return records.map((record) => analyzeRecord(record, catalog));
 }
 
+export function findCatalogDuplicateIndexes(
+  items: BulkProductDuplicateCheckItem[],
+  catalog: CatalogProductCandidate[],
+): number[] {
+  return items.flatMap((item, index) => {
+    const normalizedBrand = normalizeIdentity(item.brand);
+    const normalizedCoreName = removeBrandFromIdentity(
+      normalizeIdentity(item.name),
+      normalizedBrand,
+    );
+    const duplicateFound = catalog.some(
+      (candidate) =>
+        candidate.productType === item.productType &&
+        candidate.normalizedBrand === normalizedBrand &&
+        candidate.normalizedCoreName === normalizedCoreName &&
+        candidate.variants.some((variant) =>
+          sameVariantIdentity(item, variant),
+        ),
+    );
+
+    return duplicateFound ? [index] : [];
+  });
+}
+
+export function findRepeatedImportIndexes(
+  items: BulkProductDuplicateCheckItem[],
+): number[] {
+  return items.flatMap((item, index) => {
+    const normalizedBrand = normalizeIdentity(item.brand);
+    const normalizedCoreName = removeBrandFromIdentity(
+      normalizeIdentity(item.name),
+      normalizedBrand,
+    );
+    const repeated = items.slice(0, index).some((previous) => {
+      const previousBrand = normalizeIdentity(previous.brand);
+      const previousCoreName = removeBrandFromIdentity(
+        normalizeIdentity(previous.name),
+        previousBrand,
+      );
+
+      return (
+        previous.productType === item.productType &&
+        previousBrand === normalizedBrand &&
+        previousCoreName === normalizedCoreName &&
+        sameVariantIdentity(item, previous)
+      );
+    });
+
+    return repeated ? [index] : [];
+  });
+}
+
 function analyzeRecord(
   record: ParsedBulkProduct,
   catalog: CatalogProductCandidate[],
 ): BulkProductAnalysis {
+  if (record.duplicateOfIndex !== undefined) {
+    return result(record, {
+      status: "possible_duplicate",
+      reasons: ["duplicate_in_batch"],
+    });
+  }
+
   if (record.issues.includes("shared_quantity_between_variations")) {
     return result(record, {
       status: "incomplete",
@@ -112,21 +182,6 @@ function analyzeRecord(
 
   }
 
-  if (requiredFieldReasons.length > 0) {
-    return result(record, {
-      status: "incomplete",
-      reasons: requiredFieldReasons,
-      candidates: missingBrandCandidates,
-    });
-  }
-
-  if (record.duplicateOfIndex !== undefined) {
-    return result(record, {
-      status: "possible_duplicate",
-      reasons: ["duplicate_in_batch"],
-    });
-  }
-
   const normalizedBrand = normalizeIdentity(record.brand ?? "");
   const normalizedCoreName = removeBrandFromIdentity(
     record.normalizedName,
@@ -138,6 +193,42 @@ function analyzeRecord(
       candidate.normalizedCoreName === normalizedCoreName &&
       candidate.normalizedBrand === normalizedBrand,
   );
+
+  // Gênero e categoria não fazem parte da identidade da variante. Mesmo que
+  // estejam ausentes, uma coincidência exata já é suficiente para impedir que
+  // o mesmo produto/estoque seja cadastrado novamente.
+  if (
+    record.brand &&
+    record.productType &&
+    !hasInsufficientProductIdentity(record) &&
+    !lacksVariantIdentity(record) &&
+    sameProduct.length > 0
+  ) {
+    const exactMatches = sameProduct.flatMap((product) =>
+      product.variants
+        .filter((variant) => sameVariantIdentity(record, variant))
+        .map((variant) => ({ product, variant })),
+    );
+    const firstMatch = exactMatches[0];
+
+    if (firstMatch) {
+      return result(record, {
+        status: "existing_product",
+        proposedAction: "increment_existing_variant",
+        matchedProductId: firstMatch.product.productId,
+        matchedVariantId: firstMatch.variant.variantId,
+        candidates: sameProduct,
+      });
+    }
+  }
+
+  if (requiredFieldReasons.length > 0) {
+    return result(record, {
+      status: "incomplete",
+      reasons: requiredFieldReasons,
+      candidates: missingBrandCandidates,
+    });
+  }
 
   if (sameProduct.length === 1) {
     const product = sameProduct[0];
@@ -254,13 +345,27 @@ function lacksVariantIdentity(record: ParsedBulkProduct): boolean {
   return record.volumeMl === null;
 }
 
+type VariantIdentity = Pick<
+  ParsedBulkProduct,
+  | "concentration"
+  | "volumeMl"
+  | "variantType"
+  | "isKit"
+  | "components"
+>;
+
 function sameVariantIdentity(
-  record: ParsedBulkProduct,
-  candidate: CatalogVariantCandidate,
+  record: VariantIdentity,
+  candidate: VariantIdentity,
 ): boolean {
+  const concentrationMatches =
+    candidate.concentration === record.concentration ||
+    candidate.concentration === null ||
+    record.concentration === null;
+
   return (
     candidate.volumeMl === record.volumeMl &&
-    candidate.concentration === record.concentration &&
+    concentrationMatches &&
     candidate.variantType === record.variantType &&
     candidate.isKit === record.isKit &&
     componentSignature(candidate.components) === componentSignature(record.components)

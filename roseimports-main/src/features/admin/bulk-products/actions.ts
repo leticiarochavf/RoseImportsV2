@@ -7,6 +7,8 @@ import { requireAdminUser } from "@/lib/auth/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
   analyzeBulkProductRecords,
+  findCatalogDuplicateIndexes,
+  findRepeatedImportIndexes,
   normalizeIdentity,
   removeBrandFromIdentity,
   type BulkProductAnalysis,
@@ -193,7 +195,9 @@ export async function analyzeBulkProducts(
   );
   const analyses = analyzeBulkProductRecords(records, catalog).map((item) => {
     const slug =
-      item.status === "new_product" ? reserveUniqueSlug(item.slug, usedSlugs) : item.slug;
+      item.status !== "existing_product"
+        ? reserveUniqueSlug(item.slug, usedSlugs)
+        : item.slug;
 
     return {
       ...item,
@@ -229,11 +233,48 @@ export async function confirmBulkProducts(
     };
   }
 
+  const supabase = await createClient();
+  const productsToCreate = parsed.data.items.filter(
+    (item) =>
+      item.action === "create_inactive_product" ||
+      item.action === "create_product_with_sale_data",
+  );
+
+  if (productsToCreate.length > 0) {
+    const catalogResult = await loadCatalogForDuplicateCheck(supabase);
+
+    if (catalogResult.error) {
+      return {
+        ok: false,
+        error:
+          "Não foi possível verificar duplicidades no catálogo. Nenhuma alteração foi feita; tente analisar o lote novamente.",
+      };
+    }
+
+    const duplicateIndexes = [
+      ...new Set([
+        ...findCatalogDuplicateIndexes(
+          productsToCreate,
+          mapCatalogCandidates(catalogResult.data ?? []),
+        ),
+        ...findRepeatedImportIndexes(productsToCreate),
+      ]),
+    ];
+
+    if (duplicateIndexes.length > 0) {
+      const duplicateNames = duplicateIndexes.map(
+        (index) => productsToCreate[index]?.name ?? `Item ${index + 1}`,
+      );
+      return {
+        ok: false,
+        error: `${duplicateNames.length === 1 ? "Este produto já existe" : "Estes produtos já existem"} no catálogo: ${duplicateNames.join(", ")}. Analise o lote novamente para descartá-${duplicateNames.length === 1 ? "lo" : "los"} automaticamente. Nenhuma alteração foi feita.`,
+      };
+    }
+  }
+
   const payloadHash = `sha256:${createHash("sha256")
     .update(JSON.stringify(parsed.data.items))
     .digest("hex")}`;
-  const supabase = await createClient();
-
   try {
     const summary = await confirmBulkProductImport(
       supabase as unknown as BulkProductImportRpcClient,
@@ -254,6 +295,7 @@ export async function confirmBulkProducts(
       summary,
     };
   } catch (error) {
+    console.error("Falha ao confirmar cadastro em lote", error);
     return {
       ok: false,
       error: translateBulkImportError(
@@ -261,6 +303,60 @@ export async function confirmBulkProducts(
       ),
     };
   }
+}
+
+async function loadCatalogForDuplicateCheck(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+) {
+  return loadCatalogWithLegacyFallback(
+    async () => {
+      const result = await supabase.from("products").select(`
+        id,
+        name,
+        slug,
+        brand,
+        product_type,
+        product_variants (
+          id,
+          label,
+          volume_ml,
+          variant_type,
+          concentration,
+          is_kit,
+          product_variant_kit_items (
+            component_type,
+            component_name,
+            volume_ml,
+            component_quantity,
+            sort_order
+          )
+        )
+      `);
+      return {
+        data: result.data as unknown as CatalogProductRow[] | null,
+        error: result.error,
+      };
+    },
+    async () => {
+      const result = await supabase.from("products").select(`
+        id,
+        name,
+        slug,
+        brand,
+        product_type,
+        product_variants (
+          id,
+          label,
+          volume_ml,
+          variant_type
+        )
+      `);
+      return {
+        data: result.data as unknown as CatalogProductRow[] | null,
+        error: result.error,
+      };
+    },
+  );
 }
 
 function mapCatalogCandidates(rows: CatalogProductRow[]): CatalogProductCandidate[] {

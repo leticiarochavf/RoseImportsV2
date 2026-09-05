@@ -48,7 +48,9 @@ const createProductWithSaleDataSchema = z.object({
   ...productPresentationFields,
   ...variantFields,
   slug: z.string().trim().regex(/^[a-z0-9-]+$/).min(2).max(80),
-  priceCents: z.number().int().positive().max(100_000_00),
+  priceCents: z.literal(30_000, {
+    errorMap: () => ({ message: "O preço fixo deve ser R$ 300,00." }),
+  }),
   availableForSale: z.literal(true),
 });
 

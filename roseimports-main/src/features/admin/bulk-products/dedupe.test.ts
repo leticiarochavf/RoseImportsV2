@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import { parseBulkProducts } from "./parser";
 import {
   analyzeBulkProductRecords,
+  findCatalogDuplicateIndexes,
+  findRepeatedImportIndexes,
   type CatalogProductCandidate,
 } from "./dedupe";
 
@@ -167,17 +169,184 @@ describe("analyzeBulkProductRecords", () => {
     });
   });
 
-  it("marca gênero ausente como dado incompleto sem inferir pelo produto", () => {
+  it("reconhece duplicidade exata mesmo quando o gênero não foi informado", () => {
     const parsed = parseBulkProducts(
       "Lattafa Jasoor EDP 100 ml\nQuantidade: 2",
     );
     const [analysis] = analyzeBulkProductRecords(parsed, [candidate()]);
 
     expect(analysis).toMatchObject({
-      status: "incomplete",
-      proposedAction: null,
+      status: "existing_product",
+      proposedAction: "increment_existing_variant",
+      matchedProductId: "10000000-0000-4000-8000-000000000001",
+      matchedVariantId: "20000000-0000-4000-8000-000000000001",
     });
-    expect(analysis?.reasons).toContain("gender_missing");
+  });
+
+  it.each([
+    {
+      input: "LATTAFA AL NOBLE AMEER EDP 100 ML\nQuantidade: 1",
+      catalogName: "Al Noble Ameer – 100 ml",
+      normalizedName: "al noble ameer",
+      normalizedCoreName: "al noble ameer",
+    },
+    {
+      input: "LATTAFA HAYAATI AL MALEKY EDP 100 ML\nQuantidade: 2",
+      catalogName: "Hayaati Al Maleky – 100 ml",
+      normalizedName: "hayaati al maleky",
+      normalizedCoreName: "hayaati al maleky",
+    },
+    {
+      input: "MAISON ALHAMBRA PHILOS CENTRO EDP 100 ML\nQuantidade: 1",
+      catalogName: "Philos Centro – 100 ml",
+      normalizedName: "philos centro",
+      normalizedCoreName: "philos centro",
+      brand: "Maison Alhambra",
+    },
+  ])(
+    "descarta $catalogName quando a variante legada não informa concentração",
+    ({ input, catalogName, normalizedName, normalizedCoreName, brand }) => {
+      const [analysis] = analyzeBulkProductRecords(parseBulkProducts(input), [
+        candidate({
+          name: catalogName,
+          normalizedName,
+          normalizedCoreName,
+          brand: brand ?? "Lattafa",
+          normalizedBrand: brand ? "maison alhambra" : "lattafa",
+          variants: [
+            {
+              variantId: "20000000-0000-4000-8000-000000000007",
+              label: "100 ml",
+              concentration: null,
+              volumeMl: 100,
+              variantType: "full",
+              isKit: false,
+              components: [],
+            },
+          ],
+        }),
+      ]);
+
+      expect(analysis).toMatchObject({
+        status: "existing_product",
+        proposedAction: "increment_existing_variant",
+        matchedVariantId: "20000000-0000-4000-8000-000000000007",
+      });
+    },
+  );
+
+  it("não confunde concentrações diferentes quando ambas estão declaradas", () => {
+    const parsed = parseBulkProducts(
+      "Lattafa Jasoor EDT 100 ml, Masculino\nQuantidade: 1",
+    );
+    const [analysis] = analyzeBulkProductRecords(parsed, [candidate()]);
+
+    expect(analysis).toMatchObject({
+      status: "existing_product",
+      proposedAction: "create_inactive_variant",
+      matchedVariantId: null,
+    });
+  });
+
+  it("oferece uma barreira final para criação de produto já existente", () => {
+    const indexes = findCatalogDuplicateIndexes(
+      [
+        {
+          name: "LATTAFA AL NOBLE AMEER",
+          brand: "Lattafa",
+          productType: "perfume",
+          concentration: "EDP",
+          volumeMl: 100,
+          variantType: "full",
+          isKit: false,
+          components: [],
+        },
+      ],
+      [
+        candidate({
+          name: "Al Noble Ameer – 100 ml",
+          normalizedName: "al noble ameer",
+          normalizedCoreName: "al noble ameer",
+          variants: [
+            {
+              variantId: "20000000-0000-4000-8000-000000000007",
+              label: "100 ml",
+              concentration: null,
+              volumeMl: 100,
+              variantType: "full",
+              isKit: false,
+              components: [],
+            },
+          ],
+        }),
+      ],
+    );
+
+    expect(indexes).toEqual([0]);
+  });
+
+  it("descarta quando o próprio catálogo já contém mais de uma ficha equivalente", () => {
+    const parsed = parseBulkProducts(
+      "LATTAFA HAYAATI AL MALEKY EDP 100 ML\nQuantidade: 2",
+    );
+    const legacyVariant = {
+      variantId: "20000000-0000-4000-8000-000000000007",
+      label: "100 ml",
+      concentration: null,
+      volumeMl: 100,
+      variantType: "full" as const,
+      isKit: false,
+      components: [],
+    };
+    const catalogEntries = [
+      candidate({
+        productId: "10000000-0000-4000-8000-000000000007",
+        name: "Hayaati Al Maleky – 100 ml",
+        normalizedName: "hayaati al maleky",
+        normalizedCoreName: "hayaati al maleky",
+        variants: [legacyVariant],
+      }),
+      candidate({
+        productId: "10000000-0000-4000-8000-000000000008",
+        name: "LATTAFA HAYAATI AL MALEKY",
+        normalizedName: "lattafa hayaati al maleky",
+        normalizedCoreName: "hayaati al maleky",
+        variants: [
+          {
+            ...legacyVariant,
+            variantId: "20000000-0000-4000-8000-000000000008",
+            concentration: "EDP",
+          },
+        ],
+      }),
+    ];
+
+    const [analysis] = analyzeBulkProductRecords(parsed, catalogEntries);
+
+    expect(analysis).toMatchObject({
+      status: "existing_product",
+      proposedAction: "increment_existing_variant",
+    });
+    expect(analysis?.candidates).toHaveLength(2);
+  });
+
+  it("bloqueia também uma repetição enviada dentro do próprio payload", () => {
+    const base = {
+      name: "LATTAFA AL NOBLE AMEER",
+      brand: "Lattafa",
+      productType: "perfume" as const,
+      volumeMl: 100,
+      variantType: "full" as const,
+      isKit: false,
+      components: [],
+    };
+
+    expect(
+      findRepeatedImportIndexes([
+        { ...base, concentration: null },
+        { ...base, concentration: "EDP" },
+      ]),
+    ).toEqual([1]);
   });
 
   it("marca descrição genérica sem identidade suficiente como incompleta", () => {

@@ -9,6 +9,8 @@ export type BulkCategoryIds = {
   cosmeticos: string | null;
 };
 
+export const BULK_PRODUCT_FIXED_PRICE_CENTS = 30_000;
+
 export type BulkProductDecision =
   | { type: "review" }
   | { type: "skip" }
@@ -16,6 +18,15 @@ export type BulkProductDecision =
   | { type: "create_product_with_sale_data" }
   | { type: "create_variant"; productId: string }
   | { type: "increment_variant"; variantId: string };
+
+export type BulkProductQuickFixField =
+  | "name"
+  | "brand"
+  | "product_type"
+  | "category"
+  | "gender"
+  | "volume"
+  | "quantity";
 
 export type EditableBulkProduct = BulkProductAnalysis & {
   categoryId: string | null;
@@ -30,6 +41,7 @@ export type EditableBulkProduct = BulkProductAnalysis & {
   promotional: boolean;
   priceCents: number | null;
   availableForSale: boolean;
+  quickFixFields: BulkProductQuickFixField[];
 };
 
 export type BulkProductConfirmationBlocker =
@@ -57,20 +69,108 @@ export function createEditableItems(items: AnalysisInput[]): EditableBulkProduct
   return items.map((item, index) => {
     const decision = initialDecision(item);
     const actionable = decision.type !== "review" && decision.type !== "skip";
+    const automaticallyDiscarded = decision.type === "skip";
 
     return {
       ...item,
       clientId: `${item.sourceLine}-${index}`,
       originalName: item.name,
       selected: actionable,
-      reviewed: item.status !== "possible_duplicate" && item.status !== "incomplete",
+      reviewed:
+        automaticallyDiscarded ||
+        (item.status !== "possible_duplicate" && item.status !== "incomplete"),
       decision,
       olfactoryFamilyId: null,
       description: "",
       featured: false,
       promotional: false,
-      priceCents: null,
+      priceCents:
+        decision.type === "create_product_with_sale_data"
+          ? BULK_PRODUCT_FIXED_PRICE_CENTS
+          : null,
       availableForSale: decision.type === "create_product_with_sale_data",
+      quickFixFields: initialQuickFixFields(item),
+    };
+  });
+}
+
+function initialQuickFixFields(
+  item: AnalysisInput,
+): BulkProductQuickFixField[] {
+  const fields: BulkProductQuickFixField[] = [];
+
+  if (!item.name.trim()) fields.push("name");
+  if (!item.brand?.trim()) fields.push("brand");
+  if (!item.productType) fields.push("product_type");
+  if (!item.categorySlug) fields.push("category");
+  if (!item.gender) fields.push("gender");
+  if (!item.isKit && item.volumeMl === null) fields.push("volume");
+  if (
+    !Number.isInteger(item.quantity) ||
+    item.quantity < 1 ||
+    item.quantity > 9999
+  ) {
+    fields.push("quantity");
+  }
+
+  return fields;
+}
+
+export function mergeReanalyzedItems(
+  currentItems: EditableBulkProduct[],
+  analyzedItems: AnalysisInput[],
+): EditableBulkProduct[] {
+  const currentByClientId = new Map(
+    currentItems.map((item) => [item.clientId, item]),
+  );
+
+  return createEditableItems(analyzedItems).map((reanalyzed) => {
+    const current = currentByClientId.get(reanalyzed.clientId);
+    if (!current) return reanalyzed;
+
+    const preservedEdits = {
+      name: current.name,
+      originalName: current.originalName,
+      slug: current.slug,
+      brand: current.brand,
+      categorySlug: current.categorySlug,
+      productType: current.productType,
+      gender: current.gender,
+      concentration: current.concentration,
+      volumeMl: current.volumeMl,
+      quantity: current.quantity,
+      variantType: current.variantType,
+      isKit: current.isKit,
+      components: current.components,
+      olfactoryFamilyId: current.olfactoryFamilyId,
+      description: current.description,
+      featured: current.featured,
+      promotional: current.promotional,
+    };
+
+    if (reanalyzed.decision.type === "skip") {
+      return {
+        ...reanalyzed,
+        ...preservedEdits,
+        selected: false,
+        reviewed: true,
+      };
+    }
+
+    return {
+      ...reanalyzed,
+      ...preservedEdits,
+      selected: current.selected,
+      reviewed: current.reviewed,
+      decision: current.decision,
+      priceCents:
+        current.decision.type === "create_product_with_sale_data"
+          ? BULK_PRODUCT_FIXED_PRICE_CENTS
+          : current.priceCents,
+      availableForSale:
+        current.decision.type === "create_product_with_sale_data"
+          ? true
+          : current.availableForSale,
     };
   });
 }
@@ -104,7 +204,10 @@ export function getItemConfirmationBlockers(
 
   if (!item.selected) blockers.push("not_selected");
   if (item.decision.type === "review") blockers.push("decision_required");
-  if (item.decision.type === "skip") blockers.push("item_skipped");
+  if (item.decision.type === "skip") {
+    blockers.push("item_skipped");
+    return blockers;
+  }
   if (!item.name.trim()) blockers.push("name_missing");
   if (!item.brand?.trim()) blockers.push("brand_missing");
   if (!item.productType) blockers.push("product_type_missing");
@@ -139,10 +242,7 @@ export function getItemConfirmationBlockers(
 
   if (item.decision.type === "create_product_with_sale_data") {
     if (
-      item.priceCents === null ||
-      !Number.isInteger(item.priceCents) ||
-      item.priceCents <= 0 ||
-      item.priceCents > 100_000_00
+      item.priceCents !== BULK_PRODUCT_FIXED_PRICE_CENTS
     ) {
       blockers.push("price_missing");
     }
@@ -168,7 +268,9 @@ export function buildConfirmItems(
   items: EditableBulkProduct[],
   categoryIds: BulkCategoryIds,
 ): ConfirmBulkProductImportItem[] {
-  const selected = items.filter((item) => item.selected);
+  const selected = items.filter(
+    (item) => item.selected && item.decision.type !== "skip",
+  );
 
   if (selected.some((item) => !isItemConfirmable(item, categoryIds))) {
     throw new Error("unresolved_bulk_product_items");
@@ -257,7 +359,7 @@ export function buildConfirmItems(
         ...presentationFields,
         slug,
         ...variantFields,
-        priceCents: item.priceCents,
+        priceCents: BULK_PRODUCT_FIXED_PRICE_CENTS,
         availableForSale: true,
       };
     }
@@ -277,7 +379,11 @@ function initialDecision(item: AnalysisInput): BulkProductDecision {
     item.proposedAction === "increment_existing_variant" &&
     item.matchedVariantId
   ) {
-    return { type: "increment_variant", variantId: item.matchedVariantId };
+    return { type: "skip" };
+  }
+
+  if (item.reasons.includes("duplicate_in_batch")) {
+    return { type: "skip" };
   }
 
   if (

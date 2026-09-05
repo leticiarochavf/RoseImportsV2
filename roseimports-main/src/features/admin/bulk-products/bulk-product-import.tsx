@@ -5,17 +5,18 @@ import { useMemo, useState, useTransition } from "react";
 import { slugify } from "@/lib/slug";
 import { normalizeProductName } from "@/lib/product-name";
 import { categorySlugForProductType } from "@/lib/product-category";
-import { centsToInput, parseCurrencyToCents } from "@/lib/money";
 
 import { analyzeBulkProducts, confirmBulkProducts } from "./actions";
 import type { BulkProductImportSummary } from "./import-service";
 import { buildBulkVariantLabel } from "./parser";
 import {
   buildConfirmItems,
+  BULK_PRODUCT_FIXED_PRICE_CENTS,
   createEditableItems,
   duplicateEditableItem,
   getItemConfirmationBlockers,
   isItemConfirmable,
+  mergeReanalyzedItems,
   type BulkCategoryIds,
   type BulkProductConfirmationBlocker,
   type BulkProductDecision,
@@ -57,7 +58,7 @@ const blockerLabels: Record<BulkProductConfirmationBlocker, string> = {
   quantity_invalid: "Informe uma quantidade entre 1 e 9.999",
   manual_review_required: "Confirme que revisou os dados e a decisão",
   category_unavailable: "A categoria escolhida não está disponível",
-  price_missing: "Informe um preço válido",
+  price_missing: "O preço fixo deve ser R$ 300,00",
   sale_data_required: "Cadastre o produto com preço e venda habilitada",
   sale_availability_required: "Confirme que a versão ficará disponível para venda",
   product_target_missing: "Escolha o produto que receberá a nova versão",
@@ -137,7 +138,11 @@ export function BulkProductImport() {
         return;
       }
 
-      setItems(createEditableItems(response.items));
+      setItems((current) =>
+        current.length > 0
+          ? mergeReanalyzedItems(current, response.items)
+          : createEditableItems(response.items),
+      );
       setCategoryIds(response.categoryIds);
       setConfirmationAvailable(response.confirmationAvailable);
       setOlfactoryFamilies(response.olfactoryFamilies);
@@ -432,12 +437,19 @@ function ProductCard({
     item.status === "possible_duplicate" ||
     item.status === "incomplete" ||
     item.status === "error";
-  const [showProductDetails, setShowProductDetails] = useState(needsReview);
+  const quickFixFields = item.quickFixFields ?? [];
+  const [showProductDetails, setShowProductDetails] = useState(
+    needsReview &&
+      item.decision.type !== "skip" &&
+      quickFixFields.length === 0,
+  );
   const [showVariantDetails, setShowVariantDetails] = useState(
-    (!item.isKit && item.volumeMl === null) ||
-      !Number.isInteger(item.quantity) ||
-      item.quantity < 1 ||
-      item.quantity > 9999,
+    !quickFixFields.includes("volume") &&
+      !quickFixFields.includes("quantity") &&
+      ((!item.isKit && item.volumeMl === null) ||
+        !Number.isInteger(item.quantity) ||
+        item.quantity < 1 ||
+        item.quantity > 9999),
   );
   const variantLabel = buildBulkVariantLabel({
     volumeMl: item.volumeMl,
@@ -514,6 +526,7 @@ function ProductCard({
             </span>
           </summary>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-12">
+            {!quickFixFields.includes("name") ? (
             <FormField
               label="Nome do produto"
               htmlFor={`name-${item.clientId}`}
@@ -541,7 +554,9 @@ function ProductCard({
                 }}
               />
             </FormField>
+            ) : null}
 
+            {!quickFixFields.includes("brand") ? (
             <FormField
               label="Marca"
               htmlFor={`brand-${item.clientId}`}
@@ -558,7 +573,9 @@ function ProductCard({
                 }
               />
             </FormField>
+            ) : null}
 
+            {!quickFixFields.includes("category") ? (
             <FormField
               label="Categoria"
               htmlFor={`category-${item.clientId}`}
@@ -589,7 +606,9 @@ function ProductCard({
                 Definida automaticamente pelo tipo de produto.
               </p>
             </FormField>
+            ) : null}
 
+            {!quickFixFields.includes("product_type") ? (
             <FormField
               label="Tipo de produto"
               htmlFor={`type-${item.clientId}`}
@@ -616,7 +635,9 @@ function ProductCard({
                 <option value="cosmetico">Cosmético</option>
               </select>
             </FormField>
+            ) : null}
 
+            {!quickFixFields.includes("gender") ? (
             <FormField
               label="Gênero"
               htmlFor={`gender-${item.clientId}`}
@@ -640,6 +661,7 @@ function ProductCard({
                 <option value="unissex">Unissex</option>
               </select>
             </FormField>
+            ) : null}
 
             <div className="rounded-sm border border-line bg-ivory-deep/35 px-4 py-3 sm:col-span-2 lg:col-span-4">
               <p className="text-xs font-medium tracking-[0.08em] text-ink uppercase">
@@ -736,29 +758,32 @@ function ProductCard({
               </p>
             </div>
 
-            <FormField
-              label="Volume"
-              htmlFor={`volume-${item.clientId}`}
-              hint="Em ml."
-              className="lg:col-span-2"
-            >
-              <NumberField
-                id={`volume-${item.clientId}`}
-                value={item.volumeMl}
-                invalid={!item.isKit && item.volumeMl === null}
-                onChange={(volumeMl) =>
-                  onUpdate({
-                    volumeMl,
-                    variantLabel: buildBulkVariantLabel({
+            {!quickFixFields.includes("volume") ? (
+              <FormField
+                label="Volume"
+                htmlFor={`volume-${item.clientId}`}
+                hint="Em ml."
+                className="lg:col-span-2"
+              >
+                <NumberField
+                  id={`volume-${item.clientId}`}
+                  value={item.volumeMl}
+                  invalid={!item.isKit && item.volumeMl === null}
+                  onChange={(volumeMl) =>
+                    onUpdate({
                       volumeMl,
-                      isKit: item.isKit,
-                      isDecant: item.variantType === "decant",
-                    }),
-                  })
-                }
-              />
-            </FormField>
+                      variantLabel: buildBulkVariantLabel({
+                        volumeMl,
+                        isKit: item.isKit,
+                        isDecant: item.variantType === "decant",
+                      }),
+                    })
+                  }
+                />
+              </FormField>
+            ) : null}
 
+            {!quickFixFields.includes("quantity") ? (
             <FormField
               label="Quantidade em estoque"
               htmlFor={`quantity-${item.clientId}`}
@@ -771,6 +796,7 @@ function ProductCard({
                 onChange={(quantity) => onUpdate({ quantity: quantity ?? 0 })}
               />
             </FormField>
+            ) : null}
 
             <div className="flex items-center rounded-sm border border-line bg-ivory/40 px-4 py-3 lg:col-span-3">
               <label className="flex cursor-pointer items-start gap-3 text-sm text-ink">
@@ -859,6 +885,7 @@ function ReviewActionPanel({
             ? reasonText(item.reasons)
             : statusExplanation(item)}
         </p>
+        <QuickRequiredFields item={item} onUpdate={onUpdate} />
       </div>
 
       <div className="border-t border-line pt-4 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-5">
@@ -878,28 +905,10 @@ function ReviewActionPanel({
 
         {item.decision.type === "create_product_with_sale_data" ? (
           <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(9rem,0.55fr)_minmax(0,1fr)] sm:items-end">
-            <FormField label="Preço de venda" htmlFor={`price-${item.clientId}`}>
-              <div className="relative">
-                <span className="pointer-events-none absolute bottom-2.5 left-3 text-xs text-muted">
-                  R$
-                </span>
-                <input
-                  id={`price-${item.clientId}`}
-                  type="text"
-                  inputMode="decimal"
-                  defaultValue={
-                    item.priceCents === null ? "" : centsToInput(item.priceCents)
-                  }
-                  onChange={(event) =>
-                    onUpdate({
-                      priceCents: parseCurrencyToCents(event.target.value),
-                    })
-                  }
-                  className={`${inputClass} pl-10 ${item.priceCents === null || item.priceCents <= 0 ? missingClass : ""}`}
-                  placeholder="249,90"
-                />
-              </div>
-            </FormField>
+            <div className="rounded-sm border border-line bg-surface px-3.5 py-2.5">
+              <p className="text-xs text-muted">Preço de venda fixo</p>
+              <p className="mt-0.5 text-sm font-medium text-ink">R$ 300,00</p>
+            </div>
             <div className="rounded-sm border border-emerald-200 bg-emerald-50 px-3.5 py-2.5">
               <p className="text-sm font-medium text-emerald-900">
                 Disponível para venda: sim
@@ -950,6 +959,171 @@ function ReviewActionPanel({
   );
 }
 
+function QuickRequiredFields({
+  item,
+  onUpdate,
+}: {
+  item: EditableBulkProduct;
+  onUpdate: (update: Partial<EditableBulkProduct>) => void;
+}) {
+  const quickFixFields = item.quickFixFields ?? [];
+
+  if (item.decision.type === "skip" || quickFixFields.length === 0) {
+    return null;
+  }
+
+  const expectedCategory = categorySlugForProductType(item.productType);
+
+  return (
+    <div className="mt-4 grid gap-3 border-t border-orange-200 pt-4">
+      <p className="text-xs font-medium text-orange-950">
+        Corrija aqui os campos obrigatórios:
+      </p>
+
+      {quickFixFields.includes("name") ? (
+        <FormField label="Nome do produto" htmlFor={`name-${item.clientId}`}>
+          <TextField
+            id={`name-${item.clientId}`}
+            value={item.name}
+            invalid={!item.name.trim()}
+            maxLength={120}
+            placeholder="NOME DO PRODUTO"
+            onChange={(name) => {
+              const normalizedName = name.toLocaleUpperCase("pt-BR");
+              onUpdate({ name: normalizedName, slug: slugify(normalizedName) });
+            }}
+            onBlur={() => {
+              const normalizedName = normalizeProductName(item.name);
+              onUpdate({ name: normalizedName, slug: slugify(normalizedName) });
+            }}
+          />
+        </FormField>
+      ) : null}
+
+      {quickFixFields.includes("brand") ? (
+        <FormField label="Marca" htmlFor={`brand-${item.clientId}`}>
+          <TextField
+            id={`brand-${item.clientId}`}
+            value={item.brand ?? ""}
+            invalid={!item.brand?.trim()}
+            maxLength={80}
+            placeholder="Marca não informada"
+            onChange={(brand) =>
+              onUpdate({ brand: brand.trim() ? brand : null })
+            }
+          />
+        </FormField>
+      ) : null}
+
+      {quickFixFields.includes("product_type") ? (
+        <FormField label="Tipo de produto" htmlFor={`type-${item.clientId}`}>
+          <select
+            id={`type-${item.clientId}`}
+            value={item.productType ?? ""}
+            onChange={(event) => {
+              const productType = event.target.value
+                ? (event.target.value as EditableBulkProduct["productType"])
+                : null;
+              onUpdate({
+                productType,
+                categorySlug: categorySlugForProductType(productType),
+              });
+            }}
+            className={`${inputClass} ${!item.productType ? missingClass : ""}`}
+          >
+            <option value="">Escolha o tipo</option>
+            <option value="perfume">Perfume</option>
+            <option value="body_splash">Body splash</option>
+            <option value="cosmetico">Cosmético</option>
+          </select>
+        </FormField>
+      ) : null}
+
+      {quickFixFields.includes("category") ? (
+        <FormField label="Categoria" htmlFor={`category-${item.clientId}`}>
+          <select
+            id={`category-${item.clientId}`}
+            value={item.categorySlug ?? ""}
+            disabled={!item.productType}
+            onChange={(event) =>
+              onUpdate({
+                categorySlug: event.target.value
+                  ? (event.target.value as EditableBulkProduct["categorySlug"])
+                  : null,
+              })
+            }
+            className={`${inputClass} ${!item.categorySlug ? missingClass : ""}`}
+          >
+            <option value="">Escolha uma categoria</option>
+            {expectedCategory === "perfumes" ? (
+              <option value="perfumes">Perfumes</option>
+            ) : null}
+            {expectedCategory === "cosmeticos" ? (
+              <option value="cosmeticos">Cosméticos</option>
+            ) : null}
+          </select>
+        </FormField>
+      ) : null}
+
+      {quickFixFields.includes("gender") ? (
+        <FormField label="Gênero" htmlFor={`gender-${item.clientId}`}>
+          <select
+            id={`gender-${item.clientId}`}
+            value={item.gender ?? ""}
+            onChange={(event) =>
+              onUpdate({
+                gender: event.target.value
+                  ? (event.target.value as EditableBulkProduct["gender"])
+                  : null,
+              })
+            }
+            className={`${inputClass} ${!item.gender ? missingClass : ""}`}
+          >
+            <option value="">Escolha o gênero</option>
+            <option value="feminino">Feminino</option>
+            <option value="masculino">Masculino</option>
+            <option value="unissex">Unissex</option>
+          </select>
+        </FormField>
+      ) : null}
+
+      {quickFixFields.includes("volume") ? (
+        <FormField label="Volume" htmlFor={`volume-${item.clientId}`} hint="Em ml.">
+          <NumberField
+            id={`volume-${item.clientId}`}
+            value={item.volumeMl}
+            invalid={!item.isKit && item.volumeMl === null}
+            onChange={(volumeMl) =>
+              onUpdate({
+                volumeMl,
+                variantLabel: buildBulkVariantLabel({
+                  volumeMl,
+                  isKit: item.isKit,
+                  isDecant: item.variantType === "decant",
+                }),
+              })
+            }
+          />
+        </FormField>
+      ) : null}
+
+      {quickFixFields.includes("quantity") ? (
+        <FormField
+          label="Quantidade em estoque"
+          htmlFor={`quantity-${item.clientId}`}
+        >
+          <NumberField
+            id={`quantity-${item.clientId}`}
+            value={item.quantity}
+            required
+            onChange={(quantity) => onUpdate({ quantity: quantity ?? 0 })}
+          />
+        </FormField>
+      ) : null}
+    </div>
+  );
+}
+
 function statusExplanation(item: EditableBulkProduct): string {
   if (item.status === "new_product") {
     return "Nenhum produto equivalente foi encontrado no catálogo.";
@@ -979,7 +1153,7 @@ function decisionOutcomeText(item: EditableBulkProduct): string {
     return "um novo produto será criado inativo, com a quantidade informada e sem preço.";
   }
   if (item.decision.type === "create_product_with_sale_data") {
-    return "um novo produto será criado com o preço e o estoque informados; ele continuará oculto até receber uma foto.";
+    return "um novo produto será criado por R$ 300,00, com o estoque informado; ele continuará oculto até receber uma foto.";
   }
   if (item.decision.type === "create_variant") {
     const productId = item.decision.productId;
@@ -1026,6 +1200,10 @@ function DecisionSelect({
             decision.type === "create_product_with_sale_data"
               ? true
               : item.availableForSale,
+          priceCents:
+            decision.type === "create_product_with_sale_data"
+              ? BULK_PRODUCT_FIXED_PRICE_CENTS
+              : item.priceCents,
         });
       }}
       className={`${inputClass} ${item.decision.type === "review" ? missingClass : ""}`}

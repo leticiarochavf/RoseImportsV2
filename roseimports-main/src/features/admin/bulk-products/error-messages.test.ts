@@ -25,4 +25,18 @@ describe("mensagens do cadastro em lote", () => {
     expect(message).toContain("responsável técnico");
     expect(message).not.toMatch(/migration|\d{4}/i);
   });
+
+  it("identifica conflito com produto já existente", () => {
+    const message = translateBulkImportError(
+      'duplicate key value violates unique constraint "products_slug_key"',
+    );
+
+    expect(message).toContain("já existe");
+    expect(message).toContain("Analise");
+  });
+
+  it("explica exatamente quando há campo obrigatório inválido", () => {
+    expect(translateBulkImportError("invalid_import_gender")).toContain("gênero");
+    expect(translateBulkImportError("invalid_variant_label")).toContain("volume");
+  });
 });

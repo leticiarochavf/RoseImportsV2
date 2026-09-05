@@ -42,7 +42,7 @@ describe("schema de confirmação do cadastro em lote", () => {
         {
           ...completeItem,
           action: "create_product_with_sale_data",
-          priceCents: 24990,
+          priceCents: 30_000,
           availableForSale: true,
         },
       ],
@@ -59,6 +59,22 @@ describe("schema de confirmação do cadastro em lote", () => {
           ...completeItem,
           action: "create_product_with_sale_data",
           priceCents: 0,
+          availableForSale: true,
+        },
+      ],
+    });
+
+    expect(parsed.success).toBe(false);
+  });
+
+  it("rejeita preço diferente do valor fixo de R$ 300", () => {
+    const parsed = confirmBulkProductsSchema.safeParse({
+      idempotencyKey: "30000000-0000-4000-8000-000000000001",
+      items: [
+        {
+          ...completeItem,
+          action: "create_product_with_sale_data",
+          priceCents: 29_990,
           availableForSale: true,
         },
       ],
