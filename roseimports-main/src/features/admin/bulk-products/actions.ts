@@ -42,6 +42,7 @@ type CatalogVariantRow = {
   id: string;
   label: string;
   volume_ml: number | null;
+  variant_type: "full" | "decant";
   concentration?: BulkProductConcentration | null;
   is_kit?: boolean;
   product_variant_kit_items?: CatalogKitItemRow[];
@@ -52,6 +53,7 @@ type CatalogProductRow = {
   name: string;
   slug: string;
   brand: string | null;
+  product_type: NonNullable<BulkProductAnalysis["productType"]>;
   product_variants: CatalogVariantRow[];
 };
 
@@ -123,10 +125,12 @@ export async function analyzeBulkProducts(
           name,
           slug,
           brand,
+          product_type,
           product_variants (
             id,
             label,
             volume_ml,
+            variant_type,
             concentration,
             is_kit,
             product_variant_kit_items (
@@ -149,10 +153,12 @@ export async function analyzeBulkProducts(
           name,
           slug,
           brand,
+          product_type,
           product_variants (
             id,
             label,
-            volume_ml
+            volume_ml,
+            variant_type
           )
         `);
         return {
@@ -269,12 +275,14 @@ function mapCatalogCandidates(rows: CatalogProductRow[]): CatalogProductCandidat
       normalizedCoreName: removeBrandFromIdentity(normalizedName, normalizedBrand),
       brand: product.brand,
       normalizedBrand,
+      productType: product.product_type,
       variants: product.product_variants.map((variant) => ({
         variantId: variant.id,
         label: variant.label,
         concentration:
           variant.concentration ?? inferConcentration(`${product.name} ${variant.label}`),
         volumeMl: variant.volume_ml,
+        variantType: variant.variant_type,
         isKit: Boolean(variant.is_kit) || /^kits?\b/i.test(product.name),
         components: [...(variant.product_variant_kit_items ?? [])]
           .sort((left, right) => left.sort_order - right.sort_order)

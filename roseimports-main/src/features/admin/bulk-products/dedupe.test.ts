@@ -16,12 +16,14 @@ function candidate(
     normalizedCoreName: "jasoor",
     brand: "Lattafa",
     normalizedBrand: "lattafa",
+    productType: "perfume",
     variants: [
       {
         variantId: "20000000-0000-4000-8000-000000000001",
         label: "EDP 100 ml",
         concentration: "EDP",
         volumeMl: 100,
+        variantType: "full",
         isKit: false,
         components: [],
       },
@@ -47,6 +49,18 @@ describe("analyzeBulkProductRecords", () => {
     });
   });
 
+  it("reconhece a mesma identidade com marca em outra posição e concentração por extenso", () => {
+    const parsed = parseBulkProducts(
+      "Jasoor Lattafa Eau de Parfum 100 ml, Masculino\nQuantidade: 2",
+    );
+    const [analysis] = analyzeBulkProductRecords(parsed, [candidate()]);
+
+    expect(analysis).toMatchObject({
+      status: "existing_product",
+      proposedAction: "increment_existing_variant",
+    });
+  });
+
   it("reutiliza o produto mas propõe variante nova e inativa para outro volume", () => {
     const parsed = parseBulkProducts(
       "Lattafa Jasoor EDP 90 ml, Masculino\nQuantidade: 1",
@@ -59,6 +73,61 @@ describe("analyzeBulkProductRecords", () => {
       matchedProductId: "10000000-0000-4000-8000-000000000001",
       matchedVariantId: null,
       requiresPriceReview: true,
+    });
+  });
+
+  it("mantém miniatura separada do tamanho convencional pelo volume", () => {
+    const parsed = parseBulkProducts(
+      "Lattafa Jasoor, miniatura de 30 ml, Masculino\nQuantidade: 1",
+    );
+    const [analysis] = analyzeBulkProductRecords(parsed, [candidate()]);
+
+    expect(analysis).toMatchObject({
+      status: "existing_product",
+      proposedAction: "create_inactive_variant",
+      matchedVariantId: null,
+      volumeMl: 30,
+    });
+  });
+
+  it("não confunde decant com variante convencional do mesmo volume", () => {
+    const parsed = parseBulkProducts(
+      "Lattafa Jasoor decant de 100 ml, Masculino\nQuantidade: 1",
+    );
+    const [analysis] = analyzeBulkProductRecords(parsed, [candidate()]);
+
+    expect(analysis).toMatchObject({
+      status: "existing_product",
+      proposedAction: "create_inactive_variant",
+      matchedVariantId: null,
+    });
+  });
+
+  it("não confunde perfume com cosmético ou body splash da mesma linha", () => {
+    const parsed = parseBulkProducts(`
+      CREMES CORPORAIS
+      1 LATTAFA JASOOR BODY CREAM, 100 ML, MASCULINO
+      BODY SPLASH, BODY MIST E DESODORANTES
+      1 BODY SPLASH LATTAFA JASOOR, 100 ML, MASCULINO
+    `);
+    const analyses = analyzeBulkProductRecords(parsed, [candidate()]);
+
+    expect(analyses.map((analysis) => analysis.status)).toEqual([
+      "new_product",
+      "new_product",
+    ]);
+  });
+
+  it("não confunde um kit com seu perfume vendido individualmente", () => {
+    const parsed = parseBulkProducts(
+      "Kit Lattafa Jasoor, perfume 100 ml + spray corporal 200 ml, Masculino\nQuantidade: 1 kit",
+    );
+    const [analysis] = analyzeBulkProductRecords(parsed, [candidate()]);
+
+    expect(analysis).toMatchObject({
+      status: "new_product",
+      proposedAction: "create_inactive_product",
+      isKit: true,
     });
   });
 

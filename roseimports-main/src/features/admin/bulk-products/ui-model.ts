@@ -32,6 +32,25 @@ export type EditableBulkProduct = BulkProductAnalysis & {
   availableForSale: boolean;
 };
 
+export type BulkProductConfirmationBlocker =
+  | "not_selected"
+  | "decision_required"
+  | "item_skipped"
+  | "name_missing"
+  | "brand_missing"
+  | "product_type_missing"
+  | "category_missing"
+  | "gender_missing"
+  | "volume_missing"
+  | "quantity_invalid"
+  | "manual_review_required"
+  | "category_unavailable"
+  | "price_missing"
+  | "sale_data_required"
+  | "sale_availability_required"
+  | "product_target_missing"
+  | "variant_target_missing";
+
 type AnalysisInput = BulkProductAnalysis & { categoryId: string | null };
 
 export function createEditableItems(items: AnalysisInput[]): EditableBulkProduct[] {
@@ -51,7 +70,7 @@ export function createEditableItems(items: AnalysisInput[]): EditableBulkProduct
       featured: false,
       promotional: false,
       priceCents: null,
-      availableForSale: false,
+      availableForSale: decision.type === "create_product_with_sale_data",
     };
   });
 }
@@ -74,52 +93,75 @@ export function isItemConfirmable(
   item: EditableBulkProduct,
   categoryIds: BulkCategoryIds,
 ): boolean {
-  if (!item.selected || item.decision.type === "review" || item.decision.type === "skip") {
-    return false;
-  }
+  return getItemConfirmationBlockers(item, categoryIds).length === 0;
+}
 
+export function getItemConfirmationBlockers(
+  item: EditableBulkProduct,
+  categoryIds: BulkCategoryIds,
+): BulkProductConfirmationBlocker[] {
+  const blockers: BulkProductConfirmationBlocker[] = [];
+
+  if (!item.selected) blockers.push("not_selected");
+  if (item.decision.type === "review") blockers.push("decision_required");
+  if (item.decision.type === "skip") blockers.push("item_skipped");
+  if (!item.name.trim()) blockers.push("name_missing");
+  if (!item.brand?.trim()) blockers.push("brand_missing");
+  if (!item.productType) blockers.push("product_type_missing");
+  if (!item.categorySlug) blockers.push("category_missing");
+  if (!item.gender) blockers.push("gender_missing");
+  if (!item.isKit && item.volumeMl === null) blockers.push("volume_missing");
   if (
-    !item.name.trim() ||
-    !item.brand?.trim() ||
-    !item.productType ||
-    !item.categorySlug ||
-    !item.gender ||
-    (!item.isKit && item.volumeMl === null) ||
     !Number.isInteger(item.quantity) ||
     item.quantity < 1 ||
     item.quantity > 9999
   ) {
-    return false;
+    blockers.push("quantity_invalid");
   }
-
   if (
     (item.status === "possible_duplicate" ||
       item.status === "incomplete" ||
       item.status === "error") &&
     !item.reviewed
   ) {
-    return false;
+    blockers.push("manual_review_required");
+  }
+  if (
+    item.categorySlug &&
+    resolveCategoryId(item.categorySlug, categoryIds) === null
+  ) {
+    blockers.push("category_unavailable");
   }
 
-  if (resolveCategoryId(item.categorySlug, categoryIds) === null) return false;
-
-  if (item.decision.type === "create_product") return true;
+  if (item.decision.type === "create_product") {
+    blockers.push("sale_data_required");
+  }
 
   if (item.decision.type === "create_product_with_sale_data") {
-    return (
-      item.priceCents !== null &&
-      Number.isInteger(item.priceCents) &&
-      item.priceCents > 0 &&
-      item.priceCents <= 100_000_00 &&
-      item.availableForSale
-    );
+    if (
+      item.priceCents === null ||
+      !Number.isInteger(item.priceCents) ||
+      item.priceCents <= 0 ||
+      item.priceCents > 100_000_00
+    ) {
+      blockers.push("price_missing");
+    }
+    if (!item.availableForSale) blockers.push("sale_availability_required");
+  }
+  if (
+    item.decision.type === "create_variant" &&
+    item.decision.productId.length === 0
+  ) {
+    blockers.push("product_target_missing");
+  }
+  if (
+    item.decision.type === "increment_variant" &&
+    item.decision.variantId.length === 0
+  ) {
+    blockers.push("variant_target_missing");
   }
 
-  if (item.decision.type === "create_variant") {
-    return item.decision.productId.length > 0;
-  }
-
-  return item.decision.variantId.length > 0;
+  return blockers;
 }
 
 export function buildConfirmItems(
@@ -246,7 +288,7 @@ function initialDecision(item: AnalysisInput): BulkProductDecision {
   }
 
   if (item.proposedAction === "create_inactive_product") {
-    return { type: "create_product" };
+    return { type: "create_product_with_sale_data" };
   }
 
   return { type: "review" };

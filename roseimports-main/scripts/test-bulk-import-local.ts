@@ -144,12 +144,14 @@ const catalog: CatalogProductCandidate[] = [
     normalizedCoreName: removeBrandFromIdentity(normalizedName, normalizedBrand),
     brand: "Lattafa",
     normalizedBrand,
+    productType: "perfume",
     variants: [
       {
         variantId: existingVariantId,
         label: "100 ml",
         concentration: null,
         volumeMl: 100,
+        variantType: "full",
         isKit: false,
         components: [],
       },

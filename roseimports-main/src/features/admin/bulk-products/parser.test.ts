@@ -357,6 +357,26 @@ describe("parseBulkProducts", () => {
     expect(records[1]?.duplicateOfIndex).toBe(0);
   });
 
+  it("não confunde perfume, body splash e creme corporal da mesma linha no lote", () => {
+    const records = parseBulkProducts(`
+      BODY SPLASH, BODY MIST E DESODORANTES
+      1 BODY SPLASH LATTAFA JASOOR, 100 ML, MASCULINO
+      CREMES CORPORAIS
+      1 LATTAFA JASOOR BODY CREAM, 100 ML, MASCULINO
+      PERFUMES
+      1 LATTAFA JASOOR, 100 ML, MASCULINO
+    `);
+
+    expect(records.map((record) => record.productType)).toEqual([
+      "body_splash",
+      "cosmetico",
+      "perfume",
+    ]);
+    expect(records.every((record) => record.duplicateOfIndex === undefined)).toBe(
+      true,
+    );
+  });
+
   it("aceita quantidade antes do nome e ignora cabeçalhos sem gerar registros", () => {
     const records = parseBulkProducts(`
       BODY SPLASH, BODY MIST E DESODORANTES

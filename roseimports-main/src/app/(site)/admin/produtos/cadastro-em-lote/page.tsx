@@ -17,7 +17,7 @@ export default async function CadastroEmLotePage() {
           <p className="eyebrow">Catálogo</p>
           <h1 className="mt-1 text-2xl">Cadastro em lote</h1>
           <p className="mt-2 max-w-2xl text-sm text-muted">
-            Analise, revise e cadastre produtos mantendo pendências comerciais inativas até a conferência manual.
+            Cadastre produtos novos para venda e revise somente duplicidades ou dados incompletos.
           </p>
         </div>
         <Link href="/admin/produtos" className="inline-flex w-fit items-center justify-center border border-line px-4 py-3 text-xs font-medium tracking-[0.1em] text-ink uppercase hover:bg-white">

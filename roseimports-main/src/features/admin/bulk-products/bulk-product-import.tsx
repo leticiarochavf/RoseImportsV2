@@ -14,8 +14,10 @@ import {
   buildConfirmItems,
   createEditableItems,
   duplicateEditableItem,
+  getItemConfirmationBlockers,
   isItemConfirmable,
   type BulkCategoryIds,
+  type BulkProductConfirmationBlocker,
   type BulkProductDecision,
   type EditableBulkProduct,
 } from "./ui-model";
@@ -41,6 +43,26 @@ type Feedback = { tone: "success" | "error" | "info"; message: string };
 const inputClass =
   "mt-2 w-full rounded-sm border border-line bg-ivory px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-muted/70 focus:border-rose focus:ring-1 focus:ring-rose/10";
 const missingClass = "border-orange-400 bg-orange-50/40";
+
+const blockerLabels: Record<BulkProductConfirmationBlocker, string> = {
+  not_selected: "Selecione este item",
+  decision_required: "Escolha o que fazer com esta linha",
+  item_skipped: "Esta linha foi marcada para não cadastrar",
+  name_missing: "Informe o nome do produto",
+  brand_missing: "Informe a marca",
+  product_type_missing: "Escolha o tipo de produto",
+  category_missing: "Defina a categoria",
+  gender_missing: "Escolha o gênero",
+  volume_missing: "Informe o volume da versão",
+  quantity_invalid: "Informe uma quantidade entre 1 e 9.999",
+  manual_review_required: "Confirme que revisou os dados e a decisão",
+  category_unavailable: "A categoria escolhida não está disponível",
+  price_missing: "Informe um preço válido",
+  sale_data_required: "Cadastre o produto com preço e venda habilitada",
+  sale_availability_required: "Confirme que a versão ficará disponível para venda",
+  product_target_missing: "Escolha o produto que receberá a nova versão",
+  variant_target_missing: "Escolha a versão que receberá o estoque",
+};
 
 export function BulkProductImport() {
   const [input, setInput] = useState("");
@@ -81,6 +103,9 @@ export function BulkProductImport() {
   const invalidSelected = items.some(
     (item) => item.selected && !isItemConfirmable(item, categoryIds),
   );
+  const blockedSelectedCount = items.filter(
+    (item) => item.selected && !isItemConfirmable(item, categoryIds),
+  ).length;
   const displayedItems = useMemo(() => {
     const visible = showOnlyPending
       ? items.filter(
@@ -253,9 +278,9 @@ export function BulkProductImport() {
           role="status"
           className="border-l-2 border-amber-500 bg-amber-50 px-5 py-4 text-sm leading-relaxed text-amber-950"
         >
-          A análise está usando o schema atual do catálogo. A confirmação
-          permanece bloqueada até as migrations 0008, 0009, 0012, 0014 e 0015 serem
-          aplicadas neste banco.
+          Você pode revisar a análise, mas o cadastro deste lote ainda não está
+          disponível neste ambiente. Peça ao responsável técnico para concluir a
+          configuração antes de confirmar.
         </div>
       ) : null}
 
@@ -319,10 +344,9 @@ export function BulkProductImport() {
             </div>
 
             <div className="space-y-4 bg-ivory/50 p-4 sm:p-6">
-              {displayedItems.map((item, index) => (
+              {displayedItems.map((item) => (
                 <ProductCard
                   key={item.clientId}
-                  index={index}
                   item={item}
                   categoryIds={categoryIds}
                   olfactoryFamilies={olfactoryFamilies}
@@ -340,7 +364,13 @@ export function BulkProductImport() {
                 unidades
               </p>
               <p className="mt-1 text-xs text-muted">
-                Produtos e variantes novos serão criados inativos e sem preço.
+                {!confirmationAvailable
+                  ? "A confirmação depende da configuração técnica deste ambiente."
+                  : counts.selected === 0
+                    ? "Selecione ao menos um item apto para continuar."
+                    : blockedSelectedCount > 0
+                      ? `${blockedSelectedCount} ${blockedSelectedCount === 1 ? "item selecionado precisa" : "itens selecionados precisam"} de correção. Veja o motivo no cartão.`
+                      : "Tudo pronto. Produtos novos serão cadastrados com venda habilitada."}
               </p>
             </div>
             <button
@@ -386,14 +416,12 @@ export function BulkProductImport() {
 
 function ProductCard({
   item,
-  index,
   categoryIds,
   olfactoryFamilies,
   onUpdate,
   onDuplicate,
 }: {
   item: EditableBulkProduct;
-  index: number;
   categoryIds: BulkCategoryIds;
   olfactoryFamilies: Array<{ id: string; name: string }>;
   onUpdate: (update: Partial<EditableBulkProduct>) => void;
@@ -404,26 +432,42 @@ function ProductCard({
     item.status === "possible_duplicate" ||
     item.status === "incomplete" ||
     item.status === "error";
+  const [showProductDetails, setShowProductDetails] = useState(needsReview);
+  const [showVariantDetails, setShowVariantDetails] = useState(
+    (!item.isKit && item.volumeMl === null) ||
+      !Number.isInteger(item.quantity) ||
+      item.quantity < 1 ||
+      item.quantity > 9999,
+  );
   const variantLabel = buildBulkVariantLabel({
     volumeMl: item.volumeMl,
     isKit: item.isKit,
     isDecant: item.variantType === "decant",
   });
   const expectedCategory = categorySlugForProductType(item.productType);
+  const blockers = getItemConfirmationBlockers(
+    { ...item, selected: true },
+    categoryIds,
+  ).filter((blocker) => blocker !== "not_selected" && blocker !== "item_skipped");
+  const actionHelpId = `action-help-${item.clientId}`;
 
   return (
     <article className="overflow-hidden border border-line bg-surface shadow-[0_2px_12px_rgba(29,22,20,0.035)]">
       <header className="flex flex-col gap-3 border-b border-line px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ink text-xs font-medium text-ivory">
-            {index + 1}
+            {item.sourceLine}
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-ink">
               {item.name || "PRODUTO SEM NOME"}
             </p>
             <p className="mt-0.5 text-xs text-muted">
-              Linha {item.sourceLine} da lista · {variantLabel || "versão pendente"}
+              Linha {item.sourceLine} da lista · {variantLabel || "versão pendente"} · {item.quantity}{" "}
+              {item.quantity === 1 ? "unidade" : "unidades"}
+            </p>
+            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted/80">
+              Entrada: “{item.source}”
             </p>
           </div>
         </div>
@@ -440,6 +484,7 @@ function ProductCard({
               aria-label={`Selecionar ${item.name}`}
               checked={item.selected}
               disabled={!eligible}
+              aria-describedby={actionHelpId}
               onChange={(event) => onUpdate({ selected: event.target.checked })}
               className="size-4 accent-rose disabled:opacity-40"
             />
@@ -449,24 +494,25 @@ function ProductCard({
       </header>
 
       <div className="space-y-6 p-4 sm:p-5">
-        {needsReview ? (
-          <div className="border-l-2 border-orange-500 bg-orange-50 px-4 py-3 text-orange-950">
-            <p className="text-sm font-medium">O que você precisa corrigir</p>
-            <p className="mt-1 text-xs leading-relaxed">
-              {item.reasons.length > 0
-                ? reasonText(item.reasons)
-                : "Não foi possível concluir a análise deste item"}
-              . Preencha os campos destacados abaixo,
-              escolha o que fazer e marque a confirmação da revisão.
-            </p>
-          </div>
-        ) : null}
+        <ReviewActionPanel
+          item={item}
+          needsReview={needsReview}
+          blockers={blockers}
+          actionHelpId={actionHelpId}
+          onUpdate={onUpdate}
+        />
 
-        <section>
-          <SectionTitle
-            title="Informações do produto"
-            description="Campos equivalentes à primeira etapa do cadastro manual."
-          />
+        <details
+          open={showProductDetails}
+          onToggle={(event) => setShowProductDetails(event.currentTarget.open)}
+          className="border-t border-line pt-5"
+        >
+          <summary className="cursor-pointer text-sm font-medium text-ink marker:text-rose">
+            Conferir ou editar dados do produto
+            <span className="ml-2 text-xs font-normal text-muted">
+              nome, marca, tipo e gênero
+            </span>
+          </summary>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-12">
             <FormField
               label="Nome do produto"
@@ -666,13 +712,20 @@ function ProductCard({
               />
             </div>
           </div>
-        </section>
+        </details>
 
-        <section className="border-t border-line pt-5">
-          <SectionTitle
-            title="Preço e estoque"
-            description="O nome da variante é gerado pelo volume; preço e venda continuam bloqueados até revisão manual."
-          />
+        <details
+          open={showVariantDetails}
+          onToggle={(event) => setShowVariantDetails(event.currentTarget.open)}
+          className="border-t border-line pt-5"
+        >
+          <summary className="cursor-pointer text-sm font-medium text-ink marker:text-rose">
+            Conferir volume, quantidade e kit
+            <span className="ml-2 text-xs font-normal text-muted">
+              {variantLabel || "versão pendente"} · {item.quantity}{" "}
+              {item.quantity === 1 ? "unidade" : "unidades"}
+            </span>
+          </summary>
           <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-12">
             <div className="rounded-sm border border-line bg-ivory-deep/35 px-4 py-3 lg:col-span-4">
               <p className="text-xs font-medium tracking-[0.08em] text-ink uppercase">
@@ -749,49 +802,8 @@ function ProductCard({
               </label>
             </div>
 
-            {item.decision.type === "create_product_with_sale_data" ? (
-              <>
-                <FormField
-                  label="Preço"
-                  htmlFor={`price-${item.clientId}`}
-                  hint="Informe o preço real. Ex.: 249,90."
-                  className="lg:col-span-4"
-                >
-                  <div className="relative">
-                    <span className="pointer-events-none absolute bottom-2.5 left-3 text-xs text-muted">
-                      R$
-                    </span>
-                    <input
-                      id={`price-${item.clientId}`}
-                      type="text"
-                      inputMode="decimal"
-                      defaultValue={
-                        item.priceCents === null ? "" : centsToInput(item.priceCents)
-                      }
-                      onChange={(event) =>
-                        onUpdate({
-                          priceCents: parseCurrencyToCents(event.target.value),
-                        })
-                      }
-                      className={`${inputClass} pl-10 ${item.priceCents === null || item.priceCents <= 0 ? missingClass : ""}`}
-                      placeholder="249,90"
-                    />
-                  </div>
-                </FormField>
-                <div className="lg:col-span-8">
-                  <SimpleCheck
-                    checked={item.availableForSale}
-                    label="Versão disponível para venda"
-                    hint="O produto continuará oculto até você adicionar uma foto no cadastro manual."
-                    onChange={(availableForSale) =>
-                      onUpdate({ availableForSale })
-                    }
-                  />
-                </div>
-              </>
-            ) : null}
           </div>
-        </section>
+        </details>
 
         {item.variations.length > 0 ? (
           <div className="border-l-2 border-orange-400 bg-orange-50 px-4 py-3 text-sm text-orange-950">
@@ -809,62 +821,185 @@ function ProductCard({
           </div>
         ) : null}
 
-        <section className="grid gap-5 border-t border-line pt-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.9fr)]">
-          <div>
-            <p className="text-xs font-medium tracking-[0.08em] text-ink uppercase">
-              Diagnóstico
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span
-                className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${statusClasses[item.status]}`}
-              >
-                {statusLabels[item.status]}
-              </span>
-              {item.reasons.length === 0 ? (
-                <span className="text-xs text-muted">Sem pendências detectadas.</span>
-              ) : null}
-            </div>
-            {item.reasons.length > 0 ? (
-              <p className="mt-2 text-xs leading-relaxed text-muted">
-                {reasonText(item.reasons)}
-              </p>
-            ) : null}
-          </div>
-
-          <div>
-            <FormField
-              label="Decisão para este item"
-              htmlFor={`decision-${item.clientId}`}
-            >
-              <DecisionSelect
-                id={`decision-${item.clientId}`}
-                item={item}
-                onUpdate={onUpdate}
-              />
-            </FormField>
-            {needsReview ? (
-              <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs leading-relaxed text-ink">
-                <input
-                  type="checkbox"
-                  checked={item.reviewed}
-                  onChange={(event) =>
-                    onUpdate({ reviewed: event.target.checked, selected: false })
-                  }
-                  className="mt-0.5 size-4 shrink-0 accent-rose"
-                />
-                Revisei os dados e confirmei esta decisão manualmente.
-              </label>
-            ) : null}
-            {!eligible && item.decision.type !== "skip" ? (
-              <p className="mt-2 text-xs font-medium text-orange-900">
-                Complete os campos e a revisão para selecionar.
-              </p>
-            ) : null}
-          </div>
-        </section>
       </div>
     </article>
   );
+}
+
+function ReviewActionPanel({
+  item,
+  needsReview,
+  blockers,
+  actionHelpId,
+  onUpdate,
+}: {
+  item: EditableBulkProduct;
+  needsReview: boolean;
+  blockers: BulkProductConfirmationBlocker[];
+  actionHelpId: string;
+  onUpdate: (update: Partial<EditableBulkProduct>) => void;
+}) {
+  const skipped = item.decision.type === "skip";
+
+  return (
+    <section className="grid gap-4 border border-line bg-ivory/45 p-4 sm:p-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(20rem,1.15fr)]">
+      <div>
+        <p className="text-xs font-medium tracking-[0.08em] text-ink uppercase">
+          Situação encontrada
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span
+            className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${statusClasses[item.status]}`}
+          >
+            {statusLabels[item.status]}
+          </span>
+        </div>
+        <p className="mt-2 text-xs leading-relaxed text-muted">
+          {item.reasons.length > 0
+            ? reasonText(item.reasons)
+            : statusExplanation(item)}
+        </p>
+      </div>
+
+      <div className="border-t border-line pt-4 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-5">
+        <FormField
+          label="O que fazer com este item"
+          htmlFor={`decision-${item.clientId}`}
+        >
+          <DecisionSelect
+            id={`decision-${item.clientId}`}
+            item={item}
+            onUpdate={onUpdate}
+          />
+        </FormField>
+        <p className="mt-2 text-xs leading-relaxed text-ink">
+          <span className="font-medium">Resultado:</span> {decisionOutcomeText(item)}
+        </p>
+
+        {item.decision.type === "create_product_with_sale_data" ? (
+          <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(9rem,0.55fr)_minmax(0,1fr)] sm:items-end">
+            <FormField label="Preço de venda" htmlFor={`price-${item.clientId}`}>
+              <div className="relative">
+                <span className="pointer-events-none absolute bottom-2.5 left-3 text-xs text-muted">
+                  R$
+                </span>
+                <input
+                  id={`price-${item.clientId}`}
+                  type="text"
+                  inputMode="decimal"
+                  defaultValue={
+                    item.priceCents === null ? "" : centsToInput(item.priceCents)
+                  }
+                  onChange={(event) =>
+                    onUpdate({
+                      priceCents: parseCurrencyToCents(event.target.value),
+                    })
+                  }
+                  className={`${inputClass} pl-10 ${item.priceCents === null || item.priceCents <= 0 ? missingClass : ""}`}
+                  placeholder="249,90"
+                />
+              </div>
+            </FormField>
+            <div className="rounded-sm border border-emerald-200 bg-emerald-50 px-3.5 py-2.5">
+              <p className="text-sm font-medium text-emerald-900">
+                Disponível para venda: sim
+              </p>
+              <p className="mt-0.5 text-xs leading-relaxed text-emerald-800">
+                Obrigatório para todo produto novo. A foto ainda é necessária para aparecer no site.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        {needsReview && !skipped ? (
+          <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs leading-relaxed text-ink">
+            <input
+              type="checkbox"
+              checked={item.reviewed}
+              onChange={(event) =>
+                onUpdate({ reviewed: event.target.checked, selected: false })
+              }
+              className="mt-0.5 size-4 shrink-0 accent-rose"
+            />
+            Revisei os dados e confirmei esta decisão manualmente.
+          </label>
+        ) : null}
+
+        <div id={actionHelpId} className="mt-3" aria-live="polite">
+          {skipped ? (
+            <p className="text-xs font-medium text-muted">
+              Esta linha ficará fora da confirmação.
+            </p>
+          ) : blockers.length > 0 ? (
+            <div className="border-l-2 border-orange-500 bg-orange-50 px-3 py-2.5 text-orange-950">
+              <p className="text-xs font-medium">Para liberar a seleção:</p>
+              <ul className="mt-1 space-y-1 text-xs leading-relaxed">
+                {blockers.map((blocker) => (
+                  <li key={blocker}>• {blockerLabels[blocker]}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="text-xs font-medium text-emerald-800">
+              Ação pronta para selecionar e confirmar.
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function statusExplanation(item: EditableBulkProduct): string {
+  if (item.status === "new_product") {
+    return "Nenhum produto equivalente foi encontrado no catálogo.";
+  }
+  if (item.status === "existing_product") {
+    return item.matchedVariantId
+      ? "O produto e esta versão já existem no catálogo."
+      : "O produto já existe, mas esta versão ainda não foi encontrada.";
+  }
+  if (item.status === "possible_duplicate") {
+    return "Há um produto semelhante. Compare antes de decidir.";
+  }
+  if (item.status === "incomplete") {
+    return "Faltam dados para concluir a análise com segurança.";
+  }
+  return "A análise desta linha precisa de intervenção manual.";
+}
+
+function decisionOutcomeText(item: EditableBulkProduct): string {
+  if (item.decision.type === "review") {
+    return "nenhuma alteração será feita até você escolher uma ação.";
+  }
+  if (item.decision.type === "skip") {
+    return "esta linha não será incluída no cadastro.";
+  }
+  if (item.decision.type === "create_product") {
+    return "um novo produto será criado inativo, com a quantidade informada e sem preço.";
+  }
+  if (item.decision.type === "create_product_with_sale_data") {
+    return "um novo produto será criado com o preço e o estoque informados; ele continuará oculto até receber uma foto.";
+  }
+  if (item.decision.type === "create_variant") {
+    const productId = item.decision.productId;
+    const target = item.candidates.find(
+      (candidate) => candidate.productId === productId,
+    );
+    return `uma nova versão inativa será criada em ${target?.productName ?? "o produto escolhido"}, sem preço.`;
+  }
+
+  const variantId = item.decision.variantId;
+  const target = item.candidates
+    .flatMap((candidate) =>
+      candidate.variants.map((variant) => ({ candidate, variant })),
+    )
+    .find(({ variant }) => variant.variantId === variantId);
+  return `a quantidade será somada ao estoque de ${
+    target
+      ? `${target.candidate.productName} — ${target.variant.label}`
+      : "a versão escolhida"
+  }.`;
 }
 
 function DecisionSelect({
@@ -882,16 +1017,23 @@ function DecisionSelect({
     <select
       id={id}
       value={decisionValue(item.decision)}
-      onChange={(event) =>
-        onUpdate({ decision: parseDecision(event.target.value), selected: false })
-      }
+      onChange={(event) => {
+        const decision = parseDecision(event.target.value);
+        onUpdate({
+          decision,
+          selected: false,
+          availableForSale:
+            decision.type === "create_product_with_sale_data"
+              ? true
+              : item.availableForSale,
+        });
+      }}
       className={`${inputClass} ${item.decision.type === "review" ? missingClass : ""}`}
     >
       <option value="review">Escolha uma ação</option>
       <option value="skip">Não cadastrar esta linha</option>
-      <option value="create_product">Criar novo produto inativo</option>
       <option value="create_product_with_sale_data">
-        Criar com preço e estoque (aguarda foto)
+        Criar novo produto para venda
       </option>
       {options.map((option) => (
         <option key={option.value} value={option.value}>
@@ -1091,15 +1233,6 @@ function SimpleCheck({
         </span>
       </span>
     </label>
-  );
-}
-
-function SectionTitle({ title, description }: { title: string; description: string }) {
-  return (
-    <div>
-      <h3 className="text-sm font-medium text-ink">{title}</h3>
-      <p className="mt-1 text-xs leading-relaxed text-muted">{description}</p>
-    </div>
   );
 }
 

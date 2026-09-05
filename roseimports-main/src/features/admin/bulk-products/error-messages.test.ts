@@ -4,22 +4,25 @@ import { translateBulkImportError } from "./error-messages";
 
 describe("mensagens do cadastro em lote", () => {
   it("explica quando a RPC ainda não foi instalada", () => {
-    expect(
-      translateBulkImportError(
-        "Could not find the function public.confirm_bulk_product_import in the schema cache (PGRST202)",
-      ),
-    ).toContain("migrations 0008, 0009, 0012, 0014 e 0015");
+    const message = translateBulkImportError(
+      "Could not find the function public.confirm_bulk_product_import in the schema cache (PGRST202)",
+    );
+
+    expect(message).toContain("responsável técnico");
+    expect(message).not.toMatch(/migration|PGRST|\d{4}/i);
   });
 
   it("explica quando falta a opção de preço e estoque", () => {
-    expect(translateBulkImportError("invalid_import_action")).toContain(
-      "migration 0015",
-    );
+    const message = translateBulkImportError("invalid_import_action");
+
+    expect(message).toContain("responsável técnico");
+    expect(message).not.toMatch(/migration|\d{4}/i);
   });
 
   it("orienta a migration nova quando a categoria ainda segue a regra antiga", () => {
-    expect(
-      translateBulkImportError("product_category_type_mismatch"),
-    ).toContain("migration 0014");
+    const message = translateBulkImportError("product_category_type_mismatch");
+
+    expect(message).toContain("responsável técnico");
+    expect(message).not.toMatch(/migration|\d{4}/i);
   });
 });

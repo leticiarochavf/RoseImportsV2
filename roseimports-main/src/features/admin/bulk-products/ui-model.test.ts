@@ -5,6 +5,7 @@ import {
   buildConfirmItems,
   createEditableItems,
   duplicateEditableItem,
+  getItemConfirmationBlockers,
   isItemConfirmable,
   type EditableBulkProduct,
 } from "./ui-model";
@@ -50,7 +51,7 @@ const categoryIds = {
 };
 
 describe("modelo da revisão do cadastro em lote", () => {
-  it("seleciona automaticamente apenas propostas seguras", () => {
+  it("prepara produtos novos para venda e mantém duplicidades em revisão", () => {
     const items = createEditableItems([
       analysis(),
       analysis({
@@ -70,11 +71,12 @@ describe("modelo da revisão do cadastro em lote", () => {
 
     expect(items.map((item) => item.selected)).toEqual([true, true, false, false]);
     expect(items.map((item) => item.decision.type)).toEqual([
-      "create_product",
+      "create_product_with_sale_data",
       "increment_variant",
       "review",
       "review",
     ]);
+    expect(items[0]?.availableForSale).toBe(true);
   });
 
   it("não libera dado incompleto sem edição e decisão manual", () => {
@@ -94,7 +96,9 @@ describe("modelo da revisão do cadastro em lote", () => {
       quantity: 4,
       reviewed: true,
       selected: true,
-      decision: { type: "create_product" },
+      decision: { type: "create_product_with_sale_data" },
+      priceCents: 24990,
+      availableForSale: true,
     };
     expect(isItemConfirmable(reviewed, categoryIds)).toBe(true);
   });
@@ -108,11 +112,16 @@ describe("modelo da revisão do cadastro em lote", () => {
         matchedVariantId: "20000000-0000-4000-8000-000000000001",
       }),
     ]);
-    const payload = buildConfirmItems(items, categoryIds);
+    const payload = buildConfirmItems(
+      items.map((item, index) =>
+        index === 0 ? { ...item, priceCents: 24990 } : item,
+      ),
+      categoryIds,
+    );
 
     expect(payload).toHaveLength(2);
     expect(payload[0]).toMatchObject({
-      action: "create_inactive_product",
+      action: "create_product_with_sale_data",
       name: "LATTAFA JASOOR",
       brand: "Lattafa",
       categoryId: categoryIds.perfumes,
@@ -120,6 +129,8 @@ describe("modelo da revisão do cadastro em lote", () => {
       gender: "masculino",
       variantLabel: "100 ml",
       quantity: 2,
+      priceCents: 24990,
+      availableForSale: true,
     });
     expect(payload[1]).toEqual({
       action: "increment_existing_variant",
@@ -177,15 +188,68 @@ describe("modelo da revisão do cadastro em lote", () => {
     }
   });
 
+  it("informa exatamente o que falta para liberar a ação", () => {
+    const [item] = createEditableItems([
+      analysis({
+        brand: null,
+        gender: null,
+        status: "incomplete",
+        proposedAction: null,
+      }),
+    ]);
+
+    expect(
+      getItemConfirmationBlockers(
+        {
+          ...item!,
+          selected: true,
+          decision: { type: "create_product_with_sale_data" },
+          priceCents: 24990,
+          availableForSale: true,
+        },
+        categoryIds,
+      ),
+    ).toEqual(["brand_missing", "gender_missing", "manual_review_required"]);
+  });
+
+  it("exige disponibilidade para venda mesmo quando há preço", () => {
+    const [item] = createEditableItems([analysis()]);
+    const base: EditableBulkProduct = {
+      ...item!,
+      decision: { type: "create_product_with_sale_data" },
+      priceCents: 24990,
+      availableForSale: false,
+    };
+
+    expect(getItemConfirmationBlockers(base, categoryIds)).toEqual([
+      "sale_availability_required",
+    ]);
+  });
+
+  it("não permite cadastrar produto novo pelo caminho inativo legado", () => {
+    const [item] = createEditableItems([analysis()]);
+    const inactive: EditableBulkProduct = {
+      ...item!,
+      decision: { type: "create_product" },
+      availableForSale: false,
+    };
+
+    expect(getItemConfirmationBlockers(inactive, categoryIds)).toContain(
+      "sale_data_required",
+    );
+    expect(isItemConfirmable(inactive, categoryIds)).toBe(false);
+  });
+
   it("regenera o slug a partir do nome editado do produto novo", () => {
     const [item] = createEditableItems([analysis()]);
     const edited = {
       ...item!,
       name: "Café Árabe Nº 10",
+      priceCents: 24990,
     };
 
     expect(buildConfirmItems([edited], categoryIds)[0]).toMatchObject({
-      action: "create_inactive_product",
+      action: "create_product_with_sale_data",
       name: "CAFÉ ÁRABE Nº 10",
       slug: "cafe-arabe-n-10",
     });

@@ -32,6 +32,7 @@ export type CatalogVariantCandidate = {
   label: string;
   concentration: BulkProductConcentration | null;
   volumeMl: number | null;
+  variantType: ParsedBulkProduct["variantType"];
   isKit: boolean;
   components: KitComponent[];
 };
@@ -43,6 +44,7 @@ export type CatalogProductCandidate = {
   normalizedCoreName: string;
   brand: string | null;
   normalizedBrand: string;
+  productType: NonNullable<ParsedBulkProduct["productType"]>;
   variants: CatalogVariantCandidate[];
 };
 
@@ -132,6 +134,7 @@ function analyzeRecord(
   );
   const sameProduct = catalog.filter(
     (candidate) =>
+      candidate.productType === record.productType &&
       candidate.normalizedCoreName === normalizedCoreName &&
       candidate.normalizedBrand === normalizedBrand,
   );
@@ -179,6 +182,7 @@ function analyzeRecord(
 
   const similar = catalog.filter(
     (candidate) =>
+      candidate.productType === record.productType &&
       candidate.normalizedBrand === normalizedBrand &&
       tokenSimilarity(candidate.normalizedCoreName, normalizedCoreName) >= 0.8,
   );
@@ -257,6 +261,7 @@ function sameVariantIdentity(
   return (
     candidate.volumeMl === record.volumeMl &&
     candidate.concentration === record.concentration &&
+    candidate.variantType === record.variantType &&
     candidate.isKit === record.isKit &&
     componentSignature(candidate.components) === componentSignature(record.components)
   );

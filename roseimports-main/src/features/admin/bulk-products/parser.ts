@@ -560,14 +560,16 @@ function markDuplicates(records: ParsedBulkProduct[]): void {
     const componentKey = record.components
       .map(
         (component) =>
-          `${normalizeForComparison(component.type)}:${component.volumeMl ?? ""}:${component.quantity ?? ""}`,
+          `${normalizeForComparison(component.type)}:${normalizeForComparison(component.name ?? "")}:${component.volumeMl ?? ""}:${component.quantity ?? ""}`,
       )
       .join("|");
     const key = [
       record.normalizedName,
       normalizeForComparison(record.brand ?? ""),
+      record.productType ?? "",
       record.concentration ?? "",
       record.volumeMl ?? "",
+      record.variantType,
       record.isKit ? "kit" : "product",
       componentKey,
     ].join("::");
